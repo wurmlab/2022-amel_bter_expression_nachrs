@@ -67,7 +67,7 @@ parallel -j 10 'qualimap rnaseq -bam {} \
 ## 02-kallisto_quantification
 kallisto
 ```
-# Single end and non-stranded
+# Single-end and non-stranded
 kallisto quant -i <version>_cDNA.idx --bias --bootstrap-sample=100 \
 --output-dir=sample_id --single --fragment-length=300 --sd=20 \
 --threads=2 sample_id.fastq.gz" >
