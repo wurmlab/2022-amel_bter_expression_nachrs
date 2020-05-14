@@ -46,7 +46,7 @@ STAR --runThreadN 2 --genomeDir ./star_index/ --readFilesCommand zcat \
 # Paired-end
 STAR --runThreadN 2 --genomeDir ./star_index/ --readFilesCommand zcat \
 --outFileNamePrefix=sample_id. --outTmpDir=outdir \
---readFilesIn ../input/sample_id_1.fastq.gz,../input/sample_id_2.fastq.gz > star.log 2>&1 &!
+--readFilesIn ../input/sample_id_1.fastq.gz ../input/sample_id_2.fastq.gz > star.log 2>&1 &!
 ```
 
 Convert SAM to BAM
