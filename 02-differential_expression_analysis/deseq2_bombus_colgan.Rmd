@@ -118,7 +118,7 @@ sample_ids <- dir(file.path(
 samples_table <- read.csv(
   file.path(
     base_dir, "2019_colgan_queen-worker_head",
-    "bterrestris_colgan_metadata.csv"
+    "2019_colgan_queen-worker_head_metadata.csv"
   ),
   header = TRUE,
   stringsAsFactors = TRUE
