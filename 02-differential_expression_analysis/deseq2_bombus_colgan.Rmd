@@ -49,7 +49,7 @@ load_cran_pkgs <- function(pkg) {
   sapply(pkg, require, character.only = TRUE)
 }
 
-# Install packages available on CRAN
+# Load CRAN packages
 cran_pkgs <- c(
   "BiocManager", "tidyverse", "ggrepel", "ggforce", "ggnewscale", "ggstance",
   "ggsignif", "gghighlight", "GGally", "ggfortify", "RColorBrewer",
@@ -57,7 +57,7 @@ cran_pkgs <- c(
 )
 load_cran_pkgs(cran_pkgs)
 
-# Create function to load Bioconductor packages
+# Load Bioconductor packages
 load_bioconductor_pkgs <- function(pkg) {
   new_pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
   if (length(new_pkg)) {
