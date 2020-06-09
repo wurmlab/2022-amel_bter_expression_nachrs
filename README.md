@@ -17,9 +17,6 @@ We included data from the following case studies:
 | Jasper *et al.* 2015     | *Apis mellifera*    | Worker       | Multiple   | [PRJNA243651](https://www.ebi.ac.uk/ena/browser/view/PRJNA243651) | 10.1093/molbev/msu292      |
 | Colgan *et al*. 2019     | *Bombus terrestris* | Queen Worker | Head       | [PRJNA508397](https://www.ebi.ac.uk/ena/browser/view/PRJNA508397) | 10.1111/mec.15047          |
 | Harrison *et al*. 2015   | *Bombus terrestris* | Queen Worker | Whole body | [PRJEB9366](https://www.ebi.ac.uk/ena/browser/view/PRJEB9366) | 10.1111/mec.13215          |
-| Manfredini *et al*. 2017 | *Bombus terrestris* | Queen        | Brain      | [PRJNA358479](https://www.ebi.ac.uk/ena/browser/view/PRJNA358479) | 10.1093/gbe/evx220         |
-| Marshall *et al.* 2019   | *Bombus terrestris* | Worker       | Head       | [PRJNA533306](https://www.ebi.ac.uk/ena/browser/view/PRJNA533306) | 10.1002/evl3.129           |
-| Porath *et al*. 2019     | *Bombus terrestris* | Worker       | Brain      | [PRJNA497863](https://www.ebi.ac.uk/ena/browser/view/PRJNA497863) | 10.1038/s41467-019-09543-w |
 
 ## Load modules
 ```
