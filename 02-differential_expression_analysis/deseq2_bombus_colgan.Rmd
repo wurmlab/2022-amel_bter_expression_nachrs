@@ -202,7 +202,7 @@ dds <- DESeq2::estimateSizeFactors(dds)
 DESeq2::normalizationFactors(dds) %>% head()
 
 # Choose the reference level
-dds$caste <- relevel(dds$caste, ref = "queen")
+dds$caste <- relevel(dds$caste, ref = "worker")
 
 # Pre-filter the dataset
 nrow(dds)
@@ -225,7 +225,7 @@ DESeq2::resultsNames(dds)
 # Extract results
 res <- DESeq2::results(
   dds,
-  contrast = c("caste", "worker", "queen"),
+  contrast = c("caste", "queen", "worker"),
   lfcThreshold = 0,
   alpha = 0.1,
   pAdjustMethod = "BH"
@@ -235,7 +235,7 @@ DESeq2::summary(res)
 
 lfc <- DESeq2::lfcShrink(
   dds,
-  coef = "caste_worker_vs_queen",
+  coef = "caste_queen_vs_worker",
   type = "apeglm",
   lfcThreshold = 0,
 )
@@ -274,6 +274,33 @@ nachrs <- c(
   "LOC100649515", "LOC100649612", "LOC100649796"
 )
 
+res_nachrs <- res %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column(var = "ens_gene") %>%
+  dplyr::filter(ens_gene %in% nachrs) %>%
+  dplyr::mutate(subunit = case_when(
+    ens_gene == "LOC100643274" ~ "Alpha6",
+    ens_gene == "LOC100643282" ~ "Alpha8",
+    ens_gene == "LOC100645032" ~ "Alpha4",
+    ens_gene == "LOC100646787" ~ "Beta2",
+    ens_gene == "LOC100647301" ~ "Alpha2",
+    ens_gene == "LOC100647350" ~ "Alpha3",
+    ens_gene == "LOC100647624" ~ "Alpha1",
+    ens_gene == "LOC100648987" ~ "Alpha4e5",
+    ens_gene == "LOC100649515" ~ "Alpha5",
+    ens_gene == "LOC100649612" ~ "Beta1",
+    ens_gene == "LOC100649796" ~ "Alpha7",
+  )) %>%
+  dplyr::mutate(regulation = ifelse(log2FoldChange > 0, "Up", "Down")) %>%
+  dplyr::mutate(significance = ifelse(padj < 0.05, "Sig", "NotSig")) %>%
+  dplyr::mutate(contrast = "QueenWorker") %>%
+  dplyr::mutate_if(is.numeric, round, digits = 4)
+
+write.csv(res_nachrs,
+  file = "results/colgan/deseq2_wald_res-nachrs.csv",
+  row.names = FALSE
+)
+
 lfc_nachrs <- lfc %>%
   as.data.frame() %>%
   tibble::rownames_to_column(var = "ens_gene") %>%
@@ -293,7 +320,7 @@ lfc_nachrs <- lfc %>%
   )) %>%
   dplyr::mutate(regulation = ifelse(log2FoldChange > 0, "Up", "Down")) %>%
   dplyr::mutate(significance = ifelse(padj < 0.05, "Sig", "NotSig")) %>%
-  dplyr::mutate(contrast = "WorkerQueen") %>%
+  dplyr::mutate(contrast = "QueenWorker") %>%
   dplyr::mutate_if(is.numeric, round, digits = 4)
 
 write.csv(lfc_nachrs,
