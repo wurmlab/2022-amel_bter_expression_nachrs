@@ -73,8 +73,6 @@ bioconductor_pkgs <- c(
 )
 load_bioconductor_pkgs(bioconductor_pkgs)
 
-# BiocManager::install("pachterlab/sleuth")
-
 # Set a custom ggplot theme
 # devtools::install_github("cttobin/ggthemr")
 library(ggthemr)
@@ -106,7 +104,6 @@ base_dir <- getwd()
 
 # Create directory for results
 dir.create("results/colgan", recursive = TRUE)
-# dir.create("results/colgan/plots", recursive = TRUE)
 
 # Set sample identifiers using the names of the kallisto output directories
 sample_ids <- dir(file.path(
