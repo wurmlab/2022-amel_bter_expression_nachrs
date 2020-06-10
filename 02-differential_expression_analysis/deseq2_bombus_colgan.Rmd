@@ -213,7 +213,7 @@ nrow(dds)
 ```
 
 # Differential gene expression analysis
-# Run `DESeq2` pipeline
+## Run `DESeq2` pipeline
 ```{r}
 # Run DESeq2 pipeline
 dds <- DESeq2::DESeq(dds, test = "Wald", betaPrior = FALSE)
