@@ -276,21 +276,21 @@ res_nachrs <- res %>%
   tibble::rownames_to_column(var = "ens_gene") %>%
   dplyr::filter(ens_gene %in% nachrs) %>%
   dplyr::mutate(subunit = case_when(
-    ens_gene == "LOC100643274" ~ "Alpha6",
-    ens_gene == "LOC100643282" ~ "Alpha8",
-    ens_gene == "LOC100645032" ~ "Alpha4",
-    ens_gene == "LOC100646787" ~ "Beta2",
-    ens_gene == "LOC100647301" ~ "Alpha2",
-    ens_gene == "LOC100647350" ~ "Alpha3",
-    ens_gene == "LOC100647624" ~ "Alpha1",
-    ens_gene == "LOC100648987" ~ "Alpha4e5",
-    ens_gene == "LOC100649515" ~ "Alpha5",
-    ens_gene == "LOC100649612" ~ "Beta1",
-    ens_gene == "LOC100649796" ~ "Alpha7",
+    ens_gene == "LOC100643274" ~ "alpha6",
+    ens_gene == "LOC100643282" ~ "alpha8",
+    ens_gene == "LOC100645032" ~ "alpha4",
+    ens_gene == "LOC100646787" ~ "beta2",
+    ens_gene == "LOC100647301" ~ "alpha2",
+    ens_gene == "LOC100647350" ~ "alpha3",
+    ens_gene == "LOC100647624" ~ "alpha1",
+    ens_gene == "LOC100648987" ~ "alpha4e5",
+    ens_gene == "LOC100649515" ~ "alpha5",
+    ens_gene == "LOC100649612" ~ "beta1",
+    ens_gene == "LOC100649796" ~ "alpha7",
   )) %>%
-  dplyr::mutate(regulation = ifelse(log2FoldChange > 0, "Up", "Down")) %>%
-  dplyr::mutate(significance = ifelse(padj < 0.05, "Sig", "NotSig")) %>%
-  dplyr::mutate(contrast = "QueenWorker") %>%
+  dplyr::mutate(regulation = ifelse(log2FoldChange > 0, "up", "down")) %>%
+  dplyr::mutate(significance = ifelse(padj < 0.05, "sig", "notsig")) %>%
+  dplyr::mutate(contrast = "queen_vs_worker") %>%
   dplyr::mutate_if(is.numeric, round, digits = 4)
 
 write.csv(res_nachrs,
@@ -303,21 +303,21 @@ lfc_nachrs <- lfc %>%
   tibble::rownames_to_column(var = "ens_gene") %>%
   dplyr::filter(ens_gene %in% nachrs) %>%
   dplyr::mutate(subunit = case_when(
-    ens_gene == "LOC100643274" ~ "Alpha6",
-    ens_gene == "LOC100643282" ~ "Alpha8",
-    ens_gene == "LOC100645032" ~ "Alpha4",
-    ens_gene == "LOC100646787" ~ "Beta2",
-    ens_gene == "LOC100647301" ~ "Alpha2",
-    ens_gene == "LOC100647350" ~ "Alpha3",
-    ens_gene == "LOC100647624" ~ "Alpha1",
-    ens_gene == "LOC100648987" ~ "Alpha4e5",
-    ens_gene == "LOC100649515" ~ "Alpha5",
-    ens_gene == "LOC100649612" ~ "Beta1",
-    ens_gene == "LOC100649796" ~ "Alpha7",
+    ens_gene == "LOC100643274" ~ "alpha6",
+    ens_gene == "LOC100643282" ~ "alpha8",
+    ens_gene == "LOC100645032" ~ "alpha4",
+    ens_gene == "LOC100646787" ~ "beta2",
+    ens_gene == "LOC100647301" ~ "alpha2",
+    ens_gene == "LOC100647350" ~ "alpha3",
+    ens_gene == "LOC100647624" ~ "alpha1",
+    ens_gene == "LOC100648987" ~ "alpha4e5",
+    ens_gene == "LOC100649515" ~ "alpha5",
+    ens_gene == "LOC100649612" ~ "beta1",
+    ens_gene == "LOC100649796" ~ "alpha7",
   )) %>%
-  dplyr::mutate(regulation = ifelse(log2FoldChange > 0, "Up", "Down")) %>%
-  dplyr::mutate(significance = ifelse(padj < 0.05, "Sig", "NotSig")) %>%
-  dplyr::mutate(contrast = "QueenWorker") %>%
+  dplyr::mutate(regulation = ifelse(log2FoldChange > 0, "up", "down")) %>%
+  dplyr::mutate(significance = ifelse(padj < 0.05, "sig", "notsig")) %>%
+  dplyr::mutate(contrast = "queen_vs_worker") %>%
   dplyr::mutate_if(is.numeric, round, digits = 4)
 
 write.csv(lfc_nachrs,
@@ -334,7 +334,7 @@ clustering or other machine learning tasks.
 # Variance stabilizing transformation
 vsd <- DESeq2::vst(dds, blind = FALSE)
 
-# Effects of transformations on the variance
+# Effect of transformation on the variance
 vsn::meanSdPlot(assay(vsd))
 
 # In the variance stabilized data the standard deviation is roughly constant
@@ -373,22 +373,22 @@ vst_nachrs <- assay(vsd) %>%
   tidyr::gather(key = "sample", value = "vst_count", -ens_gene) %>%
   dplyr::filter(ens_gene %in% nachrs) %>%
   dplyr::mutate(subunit = case_when(
-    ens_gene == "LOC100643274" ~ "Alpha6",
-    ens_gene == "LOC100643282" ~ "Alpha8",
-    ens_gene == "LOC100646665" ~ "Alpha9",
-    ens_gene == "LOC100645032" ~ "Alpha4",
-    ens_gene == "LOC100646787" ~ "Beta2",
-    ens_gene == "LOC100647301" ~ "Alpha2",
-    ens_gene == "LOC100647350" ~ "Alpha3",
-    ens_gene == "LOC100647624" ~ "Alpha1",
-    ens_gene == "LOC100648987" ~ "Alpha4e5", # Alpha-4_exon5
-    ens_gene == "LOC100649515" ~ "Alpha5",
-    ens_gene == "LOC100649612" ~ "Beta1",
-    ens_gene == "LOC100649796" ~ "Alpha7",
+    ens_gene == "LOC100643274" ~ "alpha6",
+    ens_gene == "LOC100643282" ~ "alpha8",
+    ens_gene == "LOC100646665" ~ "alpha9",
+    ens_gene == "LOC100645032" ~ "alpha4",
+    ens_gene == "LOC100646787" ~ "beta2",
+    ens_gene == "LOC100647301" ~ "alpha2",
+    ens_gene == "LOC100647350" ~ "alpha3",
+    ens_gene == "LOC100647624" ~ "alpha1",
+    ens_gene == "LOC100648987" ~ "alpha4e5", # alpha-4_exon5
+    ens_gene == "LOC100649515" ~ "alpha5",
+    ens_gene == "LOC100649612" ~ "beta1",
+    ens_gene == "LOC100649796" ~ "alpha7",
   )) %>%
   dplyr::mutate(caste = case_when(
-    grepl("worker", sample) ~ "Worker",
-    grepl("queen", sample) ~ "Queen"
+    grepl("worker", sample) ~ "worker",
+    grepl("queen", sample) ~ "queen"
   )) %>%
   dplyr::mutate_if(is.numeric, round, digits = 4)
 
@@ -432,7 +432,7 @@ ggplot(vst_nachrs, aes(x = caste, y = vst_count, color = caste, fill = caste)) +
   # ylim(NA, 10.5) +
   # scale_y_continuous(breaks = seq(6, 20, 1)) +
   ggsignif::geom_signif(
-    comparisons = list(c("Queen", "Worker")),
+    comparisons = list(c("queen", "worker")),
     map_signif_level = TRUE, color = "#6A6A6A"
     # size = 1, textsize = 4, vjust = 0, y_position = 10
   )
