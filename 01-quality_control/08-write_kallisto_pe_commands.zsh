@@ -12,6 +12,6 @@ for file in ../input/*_1.fastq.gz; do
     output=tmp/kallisto_alignments/$identifier
     echo "kallisto quant -i ${kallisto_ref} --bias --bootstrap-sample=100 \
     --output-dir=${output} --threads=2 \
-    ../input/$identifier"_1.fastq.gz" \../input/$identifier"_2.fastq.gz"" >> \
+    ../input/$identifier"_1.fastq.gz" ../input/$identifier"_2.fastq.gz"" >> \
     ./kallisto_commands.sh
 done
