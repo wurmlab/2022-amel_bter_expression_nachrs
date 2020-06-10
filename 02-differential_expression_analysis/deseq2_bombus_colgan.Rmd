@@ -1,5 +1,5 @@
 ---
-title: "Differential expression analysis of nAChR genes in _Bombus terrestris_ using `DESeq2`"
+title: "Differential expression analysis of nAChR subunits in _Bombus terrestris_ using `DESeq2`"
 author: "Federico Lopez"
 date: '`r Sys.Date()`'
 output:
