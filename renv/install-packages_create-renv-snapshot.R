@@ -1,0 +1,30 @@
+load_cran_pkgs <- function(pkg) {
+  new_pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new_pkg)) {
+    install.packages(new_pkg, dependencies = TRUE)
+  }
+  sapply(pkg, require, character.only = TRUE)
+}
+
+cran_pkgs <- c(
+  "BiocManager", "tidyverse", "ggsignif", "gghighlight", "GGally", "ggfortify", 
+  "RColorBrewer", "pheatmap", "styler", "renv"
+)
+load_cran_pkgs(cran_pkgs)
+
+load_bioconductor_pkgs <- function(pkg) {
+  new_pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new_pkg)) {
+    BiocManager::install(new_pkg, version = "3.10")
+  }
+  sapply(pkg, require, character.only = TRUE)
+}
+
+bioconductor_pkgs <- c(
+  "biomaRt", "rhdf5", "tximport", "DESeq2", "apeglm", "sva", "limma", "vsn",
+  "hexbin"
+)
+load_bioconductor_pkgs(bioconductor_pkgs)
+
+renv::init(bare = TRUE, restart = FALSE)
+renv::snapshot()
