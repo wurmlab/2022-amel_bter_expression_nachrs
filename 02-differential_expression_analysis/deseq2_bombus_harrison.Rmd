@@ -280,7 +280,7 @@ for (contrast in contrasts$contrast) {
 res_nachrs <- dplyr::bind_rows(res_nachrs)
 res_nachrs
 
-# Write table of `DESeq2` Wald test results of all contrasts
+# Write table of `DESeq2` Wald test results
 write.csv(res_nachrs,
   file = "results/harrison/deseq2_wald_res-nachrs.csv",
   row.names = FALSE
@@ -330,7 +330,7 @@ ggsave(
 )
 ```
 
-## Plot the (VST) transformed counts with batch variation removed
+## Plot the (VST) transformed counts
 ```{r}
 # Create a tidy data frame with the transformed counts
 vst_nachrs <- assay(vsd) %>%
@@ -397,7 +397,7 @@ ggplot(vst_nachrs, aes(x = condition, y = vst_count,
   ) +
   labs(
     x = "Condition",
-    y = expression(paste("Log"[2], " (VST) transformed count")) # batch variation removed
+    y = expression(paste("Log"[2], " (VST) transformed count"))
   ) +
   scale_fill_manual(name = "condition", values = condition_colors) +
   scale_color_manual(name = "condition", values = condition_colors) +
