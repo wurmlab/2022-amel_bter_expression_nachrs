@@ -23,10 +23,10 @@ SCRATCH="/data/scratch/btx422" # Set to user scratch
 # Check that working directory exists
 if [ -d "$BASEDIR" ]
 then
-	echo "Files will be processed in ${BASEDIR}."
+    echo "Files will be processed in ${BASEDIR}."
 else
-	echo "Error: ${BASEDIR} not found. Cannot continue."
-	exit 1
+    echo "Error: ${BASEDIR} not found. Cannot continue."
+    exit 1
 fi
 
 cd ${BASEDIR}
@@ -59,11 +59,11 @@ mkdir ${SCRATCH}/${DATE}
 ln -s ${SCRATCH}/${DATE} tmp
 mkdir -p tmp/star
 for file in ../input/*.fastq.gz; do
-	echo "Writing STAR commands for ${file}"
-	output=tmp/star/$(basename $file .fastq.gz)
-	echo "STAR --runThreadN 2 --genomeDir ./star_index/ --readFilesCommand zcat \
-	--outFileNamePrefix=${output}. --outTmpDir=${output} \
-	--readFilesIn $file" >> ./star_commands.sh
+    echo "Writing STAR commands for ${file}"
+    output=tmp/star/$(basename $file .fastq.gz)
+    echo "STAR --runThreadN 2 --genomeDir ./star_index/ --readFilesCommand zcat \
+    --outFileNamePrefix=${output}. --outTmpDir=${output} \
+    --readFilesIn $file" >> ./star_commands.sh
 done
 parallel -j 8 < star_commands.sh > star_commands.log 2>&1
 echo "Finished running STAR commands"
