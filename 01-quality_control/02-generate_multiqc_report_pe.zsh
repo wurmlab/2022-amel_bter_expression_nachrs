@@ -143,7 +143,7 @@ for dataset in $DATASETS; do
 	for file in ../input/*_1.fastq.gz; do
 		identifier=$(basename $file _1.fastq.gz)
 		echo "Writing kallisto commands for sample ${identifier}"
-		output=tmp/kallisto/$(basename $file .fastq.gz)
+		output=tmp/kallisto/${identifier}
 		echo "./kallisto quant -i kallisto_index --bias --bootstrap-sample=100 \
 		--output-dir=${output} --threads=2" \
 		../input/$identifier"_1.fastq.gz" ../input/$identifier"_2.fastq.gz" >> ./kallisto_commands.sh
