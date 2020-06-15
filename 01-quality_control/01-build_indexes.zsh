@@ -15,10 +15,10 @@ BASEDIR="/data/archive/archive-SBCS-WurmLab/awitwicka/2020_amel-bter-expression-
 # Check that working directory exists
 if [ -d "$BASEDIR" ]
 then
-	echo "Files will be processed in ${BASEDIR}."
+    echo "Files will be processed in ${BASEDIR}."
 else
-	echo "Error: ${BASEDIR} not found. Cannot continue."
-	exit 1
+    echo "Error: ${BASEDIR} not found. Cannot continue."
+    exit 1
 fi
 
 cd ${BASEDIR}
@@ -46,14 +46,14 @@ ln -s Bombus_terrestris.Bter_1.0.47.gtf Bter.gtf
 
 echo "Building STAR indexes"
 for species in ${SPECIES}; do
-	mkdir ${species}_star_index
-	cd ${species}_star_index
-	STAR --runThreadN 8 --runMode genomeGenerate \
-	--genomeDir . \
-	--genomeFastaFiles ../${species}.dna.fa \
-	--sjdbGTFfile ../${species}.gtf \
-	--sjdbOverhang 100 > ${species}_star_index.log 2>&1
-	cd ..
+    mkdir ${species}_star_index
+    cd ${species}_star_index
+    STAR --runThreadN 8 --runMode genomeGenerate \
+    --genomeDir . \
+    --genomeFastaFiles ../${species}.dna.fa \
+    --sjdbGTFfile ../${species}.gtf \
+    --sjdbOverhang 100 > ${species}_star_index.log 2>&1
+    cd ..
 done
 echo "Finished building STAR indexes"
 
@@ -72,10 +72,10 @@ ln -s Bombus_terrestris.Bter_1.0.cdna.all.fa Bter.cdna.fa
 ln -s ${BASEDIR}/softw/kallisto/kallisto kallisto
 echo "Building kallisto indexes"
 for species in $SPECIES; do
-	mkdir ${species}_kallisto_index
-	cd ${species}_kallisto_index
-	../kallisto index -i ${species}_kallisto.idx ../${species}.cdna.fa > \
-	${species}_kallisto_index.log 2>&1
-	cd ..
+    mkdir ${species}_kallisto_index
+    cd ${species}_kallisto_index
+    ../kallisto index -i ${species}_kallisto.idx ../${species}.cdna.fa > \
+    ${species}_kallisto_index.log 2>&1
+    cd ..
 done
 echo "Finished building kallisto indexes"
