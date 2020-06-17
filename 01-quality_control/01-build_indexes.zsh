@@ -10,7 +10,7 @@
 module load star/2.7.0f
 
 SPECIES=(Amel Bter) 
-BASEDIR="/data/archive/archive-SBCS-WurmLab/awitwicka/2020_amel-bter-expression-nachrs"
+BASEDIR="/data/archive/archive-SBCS-WurmLab/awitwicka/2020-amel_bter_expression_nachrs"
 
 # Check that working directory exists
 if [ -d "$BASEDIR" ]
