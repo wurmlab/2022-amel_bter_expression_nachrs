@@ -15,8 +15,8 @@ module load samtools/1.9
 
 SPECIES="Bter" # Set either "Amel" or "Bter"
 DATE="2020-06-10"
-BASEDIR="/data/archive/archive-SBCS-WurmLab/awitwicka/2020_amel-bter-expression-nachrs"
-INPUT="/data/archive/archive-SBCS-WurmLab/awitwicka/2020_amel-bter-expression-nachrs/input"
+BASEDIR="/data/archive/archive-SBCS-WurmLab/awitwicka/2020-amel_bter_expression_nachrs"
+INPUT="/data/archive/archive-SBCS-WurmLab/awitwicka/2020-amel_bter_expression_nachrs/input"
 SCRATCH="/data/scratch/btx422" # Set to user scratch
 
 # Check that working directory exists
@@ -38,7 +38,7 @@ then
 else
     DATASETS=(
         "2017_manfredini_queen_brain"
-        # "2019_porath_worker_brain"
+        "2019_porath_worker_brain"
         )
     echo "Processing bumble bee data sets: ${DATASETS}"
 fi
@@ -170,4 +170,5 @@ for dataset in $DATASETS; do
     # Rename MultiQC report and data
     mv multiqc_report.html ${dataset}-multiqc_report.html
     mv multiqc_data ${dataset}-multiqc_data
+    cd ${BASEDIR}/results
 done
