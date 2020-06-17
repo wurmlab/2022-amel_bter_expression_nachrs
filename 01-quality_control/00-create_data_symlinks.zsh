@@ -6,7 +6,7 @@
 # Author(s): Federico Lopez-Osorio, Alicja Witwicka
 ###############################################################################
 
-BASEDIR="/data/archive/archive-SBCS-WurmLab/awitwicka/2020_amel-bter-expression-nachrs"
+BASEDIR="/data/archive/archive-SBCS-WurmLab/awitwicka/2020-amel_bter_expression_nachrs"
 AMELDATASETS=(
     "2018-christen_worker_brains"
     "2020-01-Jasper_2015"
