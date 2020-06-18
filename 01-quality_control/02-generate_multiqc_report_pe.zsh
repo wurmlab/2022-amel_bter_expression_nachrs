@@ -23,7 +23,7 @@ SCRATCH="/data/scratch/btx422" # Set to user scratch
 if [ ${SPECIES} = "Amel" ]
 then
     DATASETS=(
-        "2020-01-Jasper_2015"
+        "2015-jasper_worker_tissues"
         )
     echo "Processing honey bee data sets: ${DATASETS}"
 else
