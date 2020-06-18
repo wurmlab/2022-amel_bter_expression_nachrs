@@ -6,7 +6,8 @@
 # Author(s): Federico Lopez-Osorio, Alicja Witwicka
 ###############################################################################
 
-BASEDIR="/data/archive/archive-SBCS-WurmLab/awitwicka/2020-amel_bter_expression_nachrs"
+# Run script within "input" directory
+
 AMELDATASETS=(
     "2018-christen_worker_brains"
     "2020-01-Jasper_2015"
@@ -14,24 +15,11 @@ AMELDATASETS=(
     "2015-manfredini_queen_brains"
     )
 BTERDATASETS=(
-    "2019_colgan_queen-worker_head"
-    "2015_harrison_queen_worker_whole_body"
-    "2017_manfredini_queen_brain"
-    "2019_porath_worker_brain"
+    "2019-colgan_queen_worker_head"
+    "2015-harrison_queen_worker_whole_body"
+    "2017-manfredini_queen_brain"
+    "2019-porath_worker_brain"
     )
-
-# Check that working directory exists
-if [ -d "$BASEDIR" ]
-then
-    echo "Files will be processed in ${BASEDIR}."
-else
-    echo "Error: ${BASEDIR} not found. Cannot continue."
-    exit 1
-fi
-
-cd ${BASEDIR}
-mkdir input
-cd input
 
 echo "Creating symbolic links for honey bee data sets: ${AMELDATASETS}"
 for dataset in ${AMELDATASETS}; do
