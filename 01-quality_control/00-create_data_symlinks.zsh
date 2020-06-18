@@ -9,10 +9,10 @@
 # Run script within "input" directory
 
 AMELDATASETS=(
-    "2018-christen_worker_brains"
-    "2020-01-Jasper_2015"
+    "2015-jasper_worker_tissues"
     "2015-liberti_queen_brains"
     "2015-manfredini_queen_brains"
+    "2018-christen_worker_brains"
     )
 BTERDATASETS=(
     "2019-colgan_queen_worker_head"
