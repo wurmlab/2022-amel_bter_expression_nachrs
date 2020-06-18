@@ -7,44 +7,35 @@
 # Author(s): Federico Lopez-Osorio, Alicja Witwicka
 ###############################################################################
 
+# Run script within "results" directory
+
 # Load modules
 module load fastqc/0.11.9
 module load parallel/20170422
 module load star/2.7.0f
 module load samtools/1.9
 
+# Execute script within "results" directory
 SPECIES="Bter"
-DATASET="2019_colgan_queen-worker_head"
-DATE="2020-06-10"
-BASEDIR="/data/archive/archive-SBCS-WurmLab/awitwicka/2020_amel-bter-expression-nachrs"
-INPUT="/data/archive/archive-SBCS-WurmLab/awitwicka/2020_amel-bter-expression-nachrs/input"
+DATASET="2019-colgan_queen_worker_head"
+DATE="2020-06-16"
 SCRATCH="/data/scratch/btx422" # Set to user scratch
 
-# Check that working directory exists
-if [ -d "$BASEDIR" ]
-then
-    echo "Files will be processed in ${BASEDIR}."
-else
-    echo "Error: ${BASEDIR} not found. Cannot continue."
-    exit 1
-fi
-
-cd ${BASEDIR}
-echo 'Creating "results" directory in '${BASEDIR}
-mkdir -p results
-cd results
+# Create symbolic links for "input", "softw", and "tmp" directories
+ln -sfn ../input .
+ln -sfn ../softw .
+ln -sfn ../tmp .
 
 # Run FastQC, STAR, and Qualimap
 mkdir ${DATASET}
 cd ${DATASET}
-ln -s ${INPUT}/${DATASET} input
 
 # Run FastQC
 echo "Running FastQC with data set "${DATASET}
 mkdir ${DATE}-fastqc
 cd ${DATE}-fastqc
-parallel -j 8 'fastqc {}' ::: ../input/*.fastq.gz > fastqc.log 2>&1
-mv ../input/*.{zip,html} .
+parallel -j 8 'fastqc {}' ::: ../../input/${DATASET}/*.fastq.gz > fastqc.log 2>&1
+mv ../../input/${DATASET}/*.{zip,html} .
 echo "Finished running FastQC"
 cd ..
 
@@ -53,12 +44,12 @@ echo "Running STAR with data set "${DATASET}
 mkdir ${DATE}-star
 cd ${DATE}-star
 echo "Creating symbolic link for bumble bee index"
-ln -s ${BASEDIR}/tmp/Bter_star_index star_index
+ln -s ../../tmp/Bter_star_index star_index
 
 mkdir ${SCRATCH}/${DATE}
 ln -s ${SCRATCH}/${DATE} tmp
 mkdir -p tmp/star
-for file in ../input/*.fastq.gz; do
+for file in ../../input/${DATASET}/*.fastq.gz; do
     echo "Writing STAR commands for ${file}"
     output=tmp/star/$(basename $file .fastq.gz)
     echo "STAR --runThreadN 2 --genomeDir ./star_index/ --readFilesCommand zcat \
@@ -86,7 +77,7 @@ module load qualimap/2.2.1
 mkdir ${DATE}-qualimap
 cd ${DATE}-qualimap
 ln -s ${SCRATCH}/${DATE}/star star
-GTF=${BASEDIR}/tmp/Bombus_terrestris.Bter_1.0.47.gtf
+GTF="../../tmp/Bombus_terrestris.Bter_1.0.47.gtf"
 export GTF
 
 parallel -j 8 'qualimap rnaseq -bam {} -gtf "$GTF" \
@@ -94,22 +85,23 @@ parallel -j 8 'qualimap rnaseq -bam {} -gtf "$GTF" \
 --sequencing-protocol strand-specific-reverse' ::: \
 star/*.bam > qualimap.log 2>&1
 echo "Finished running Qualimap"
+rm star
 cd ..
 
 # Run kallisto
 echo "Running kallisto with data set "${DATASET}
 mkdir ${DATE}-kallisto
 cd ${DATE}-kallisto
-ln -s ${BASEDIR}/softw/kallisto/kallisto kallisto
+ln -s ../../softw/kallisto/kallisto kallisto
 ln -s ${SCRATCH}/${DATE} tmp
 mkdir -p tmp/kallisto
 echo "Creating symbolic link for bumble bee index"
-ln -s ${BASEDIR}/tmp/Bter_kallisto_index/Bter_kallisto.idx kallisto_index
+ln -s ../../tmp/Bter_kallisto_index/Bter_kallisto.idx kallisto_index
 colonies_castes=(C61_queen C48_queen C34_queen C06_queen C06_worker C61_worker C48_worker C34_worker)
 
 for sample in $colonies_castes; do
     echo "Running with ${sample}"
-    fastqs=$(find ../input/ -name "*${sample}*.fastq.gz" | tr "\n" " ")
+    fastqs=$(find ../../input/${DATASET}/ -name "*${sample}*.fastq.gz" | tr "\n" " ")
     output=tmp/kallisto/${sample}"_head"
     echo "./kallisto quant -i kallisto_index --bias --bootstrap-sample=100 \
     --output-dir=${output} --single --fragment-length=300 --sd=20 \
@@ -124,17 +116,18 @@ rm -r tmp
 cd ..
 
 # Delete BAM files in STAR results
-rm ${BASEDIR}/results/${DATASET}/${DATE}-star/tmp/star/*.bam
+rm ${DATE}-star/tmp/star/*.bam
 # Move other STAR output files to STAR results directory
-cd ${BASEDIR}/results/${DATASET}/${DATE}-star
+cd ${DATE}-star
 mkdir results
 mv tmp/star/* results/
 # Remove temporary directories
 rm -r tmp ${SCRATCH}/${DATE}
+cd ..
 
 # Generate MultiQC report
-cd ${BASEDIR}/results/${DATASET}
 multiqc .
 # Rename MultiQC report and data
 mv multiqc_report.html ${DATASET}-multiqc_report.html
 mv multiqc_data ${DATASET}-multiqc_data
+cd ..
