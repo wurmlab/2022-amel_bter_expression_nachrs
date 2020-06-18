@@ -6,24 +6,12 @@
 # Author(s): Federico Lopez-Osorio, Alicja Witwicka
 ###############################################################################
 
+# Run script within "tmp" directory
+
 # Load modules
 module load star/2.7.0f
 
-SPECIES=(Amel Bter) 
-BASEDIR="/data/archive/archive-SBCS-WurmLab/awitwicka/2020-amel_bter_expression_nachrs"
-
-# Check that working directory exists
-if [ -d "$BASEDIR" ]
-then
-    echo "Files will be processed in ${BASEDIR}."
-else
-    echo "Error: ${BASEDIR} not found. Cannot continue."
-    exit 1
-fi
-
-cd ${BASEDIR}
-mkdir tmp
-cd tmp
+SPECIES=(Amel Bter)
 
 # Build STAR indexes
 echo "Downloading Apis mellifera genome and annotation from Ensembl"
@@ -69,9 +57,9 @@ gzip -d Bombus_terrestris.Bter_1.0.cdna.all.fa.gz
 ln -s Bombus_terrestris.Bter_1.0.cdna.all.fa Bter.cdna.fa
 
 # Build kallisto index
-ln -s ${BASEDIR}/softw/kallisto/kallisto kallisto
+ln -s ../softw/kallisto/kallisto kallisto
 echo "Building kallisto indexes"
-for species in $SPECIES; do
+for species in ${SPECIES}; do
     mkdir ${species}_kallisto_index
     cd ${species}_kallisto_index
     ../kallisto index -i ${species}_kallisto.idx ../${species}.cdna.fa > \
