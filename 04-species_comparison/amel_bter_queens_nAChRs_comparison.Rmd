@@ -1,0 +1,274 @@
+---
+title: "amel_bombus_queen_comparison"
+author: "Alicja Witwicka"
+date: "16/06/2020"
+output:
+  github_document:
+    toc: yes
+  pdf_document: 
+    fig_caption: yes
+    toc: yes
+  html_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r library_setup, echo = FALSE, message = FALSE, warning = FALSE}
+#renv::snapshot()
+```
+```{r libraries, echo = FALSE, message = FALSE, warning = FALSE}
+#Load all packages
+library("tximport")
+library("readr")
+library("ggplot2")
+library("DESeq2")
+library("dplyr")
+library("tibble")
+library("ggthemr")
+for (package in (.packages()) ) {
+ print(paste("Package", package, "version", packageVersion(package)))
+}
+
+# Set colour palletes 
+cbp1 <- cbp1 <- custom_palette <- ccustom_palette <- c(
+  "#6A6A6A", "#ED665D", "#5D9CED", "#CDCC5D", "#ED97CA", "#67BF5C",  "#A2A2A2",
+  "#CD945D", "#AD8BC9", "#FF9E4A", "#72CEA2", "#CE729E", "#A8786E", "#6DCCDA")
+custom_theme <- ggthemr::define_palette(
+  swatch = cbp1,
+  gradient = c( upper = "#0072B2", lower = "#F0E442" ))
+ggthemr::ggthemr(custom_theme)
+ggthemr::colour_plot(cbp1)
+```
+## Introduction
+
+# <b>Questions:</b>
+  1. Are there differences in the usage of nAChR subunits in the queen brains of A. mellifera and B. terrestris?
+Datasets used:
+<br>-Liberti et al. 2015 (amel)
+<br>-Manfredini et al. 2015 (amel)
+<br>-Manfredini et al. 2018 (bter)
+<br>    
+## Load data and prepare it fo analysis
+- The data was loaded using tximport, metadata (.csv) was composed and imported
+
+```{r import_files_&_metadata, include = FALSE}
+# Read kallisto output and metadata ###
+#############
+### AMEL ###
+############
+# Set sample identifiers using the names of the kallisto output directories
+sample_amel <- dir(file.path("kallisto_results_trimmed/species_amel"))
+
+# Read metadata table
+samples_amel <- read.csv(
+  file.path("kallisto_results_trimmed/metadata", "species_amel.csv"),
+     header = TRUE,
+       stringsAsFactors = TRUE)
+
+# Read .h5 files in
+filenames_amel <- file.path(
+  "kallisto_results_trimmed/species_amel",
+  samples_amel$sample,
+  "abundance.h5")
+
+# Assign names to files
+names(filenames_amel) <- samples_amel$sample
+
+# check that all files were assigned 
+all(file.exists(filenames_amel)) 
+#############
+### BTER ###
+############
+# Set sample identifiers using the names of the kallisto output directories
+sample_bter <- dir(file.path("kallisto_results_trimmed/species_bter"))
+
+# Read metadata table
+samples_bter <- read.csv(
+  file.path("kallisto_results_trimmed/metadata", "species_bter.csv"),
+     header = TRUE,
+       stringsAsFactors = TRUE)
+
+# Read .h5 files in
+filenames_bter <- file.path(
+  "kallisto_results_trimmed/species_bter",
+  samples_bter$sample,
+  "abundance.h5")
+
+# Assign names to files
+names(filenames_bter) <- samples_bter$sample
+
+# check that all files were assigned 
+all(file.exists(filenames_bter)) 
+```
+- I used biomaRt to associate transcripts to genes (from ensmbl metazoa) seperately for both species...
+- I imported Kallisto output
+
+```{r biomaRt_tximport, include = FALSE}
+#### Associate transcripts to genes ####
+biomaRt::listMarts(host = "metazoa.ensembl.org")
+# biomaRt::listMarts(host = "eg40-metazoa.ensembl.org") # version 40
+# biomaRt::listEnsemblArchives()
+metazoa_mart_amel <- biomaRt::useMart(
+  biomart = "metazoa_mart",
+  dataset = "amellifera_eg_gene",
+  host = "metazoa.ensembl.org")
+#
+metazoa_mart_bter <- biomaRt::useMart(
+  biomart = "metazoa_mart",
+  dataset = "bterrestris_eg_gene",
+  host = "metazoa.ensembl.org")
+
+transcript_to_gene_amel <- biomaRt::getBM(
+  attributes = c("ensembl_transcript_id", "ensembl_gene_id"),
+  mart = metazoa_mart_amel)
+#
+transcript_to_gene_bter <- biomaRt::getBM(
+  attributes = c("ensembl_transcript_id", "ensembl_gene_id"),
+  mart = metazoa_mart_bter)
+
+# Remove all biomaRt cached files
+#biomaRt::biomartCacheInfo()
+#biomaRt::biomartCacheClear()
+#biomaRt::listAttributes(metazoa_mart_bter)
+#biomaRt::listAttributes(metazoa_mart_amel)
+
+# Import kallisto quantifications
+txi_kallisto_amel <- tximport::tximport(filenames_amel,
+  type = "kallisto",
+  tx2gene = transcript_to_gene_amel,
+  txOut = FALSE)
+#
+txi_kallisto_bter <- tximport::tximport(filenames_bter,
+  type = "kallisto",
+  tx2gene = transcript_to_gene_bter,
+  txOut = FALSE)
+```
+# 1.Extracting abundances from the data and making a data frame for both species. 
+# 2.Extracting genes of interest (seperate).
+
+```{r ratios, include = FALSE}
+# Extract abundances from the imported list and make it a data frame
+abundances_amel <- txi_kallisto_amel["abundance"]
+abundances_amel <- as.data.frame(abundances_amel)
+#
+abundances_bter <- txi_kallisto_bter["abundance"]
+abundances_bter <- as.data.frame(abundances_bter)
+
+# Extract genes of interest
+### Gene vectors for A. mellifera:
+gene_amel <- c("GB40923", "GB53053", "GB42644", 
+             "GB53055", "GB47845", "GB43416", 
+             "GB42850", "GB43275", "GB50159")
+names_achrs_amel <- c("alpha8","alpha7","alpha2","beta1","alpha3",
+                 "alpha6","alpha1","alpha4","alpha5")
+### Gene vectors for B. terrestris:
+gene_bter <- c("LOC100643274", "LOC100643282", 
+  "LOC100647301", "LOC100647350", "LOC100647624", "LOC100648987",
+  "LOC100649515", "LOC100649612", "LOC100649796")
+names_achrs_bter <- c("alpha6", "alpha8", "alpha2", "alpha3", "alpha1", "alpha4", "alpha5", "beta1", "alpha7")
+# "LOC100645032" ~ "alpha4" excluded as well as beta2 and alpha9 in both 
+### Extract for A. mellifera:
+gene_list_amel <- abundances_amel[gene_amel,]
+row.names(gene_list_amel) <- names_achrs_amel
+### Extract for B. terrestris:
+gene_list_bter <- abundances_bter[gene_bter,]
+row.names(gene_list_bter) <- names_achrs_bter
+
+# Extract single-study samples (Manfredini)
+gene_list_amel <- gene_list_amel[, -c(5:7)]
+# Select four random samples for Bombus 
+gene_list_bter <- gene_list_bter[, c(2,3,5,6,7)]
+```
+# Normalising TPMs for both species
+
+```{r normalisation, message = FALSE}
+# Calculate sums of each collumn
+## A. mellifera:
+col_sum_amel <- gene_list_amel %>% dplyr::summarize_if(is.numeric, sum)
+col_sum_amel
+
+ratios_amel <- mapply('/', gene_list_amel, col_sum_amel)
+row.names(ratios_amel) <- names_achrs_amel
+ratios_amel
+## B. terrestris:
+col_sum_bter <- gene_list_bter %>% dplyr::summarize_if(is.numeric, sum)
+col_sum_bter
+
+ratios_bter <- mapply('/', gene_list_bter, col_sum_bter)
+row.names(ratios_bter) <- names_achrs_bter
+ratios_bter
+```
+```{r transformation, message = FALSE}
+### A. mellifera:
+# Transform data frame
+ratios_amel <- as.data.frame(ratios_amel)
+ratios_transf_amel <- ratios_amel[ , order(names(ratios_amel))] %>% tibble::rownames_to_column("AChRs")
+ratios_transf_amel <- data.frame(ratios_transf_amel[1], stack(ratios_transf_amel[2:5]))
+# Add species column
+ratios_transf_amel <- cbind(ratios_transf_amel, rep("amel",length(ratios_transf_amel)))
+# Change names
+col_names_plot_amel <- c("nAChRs", "amel_tpm", "amel_individual", "species")
+colnames(ratios_transf_amel) <- col_names_plot_amel
+#Remove repeating pattern in castes 
+ratios_transf_amel <- ratios_transf_amel %>% mutate_all(~gsub("abundance.|_j", "", .)) %>% mutate_all(~gsub("queen", "apis", .))
+# Make TPMs numeric
+ratios_transf_amel$amel_tpm <- as.numeric(ratios_transf_amel$amel_tpm)
+
+### B. terrestris:
+# Transform data frame
+ratios_bter <- as.data.frame(ratios_bter)
+ratios_transf_bter <- ratios_bter[ , order(names(ratios_bter))] %>% tibble::rownames_to_column("AChRs")
+ratios_transf_bter <- data.frame(ratios_transf_bter[1], stack(ratios_transf_bter[2:5]))
+# Add species column
+ratios_transf_bter <- cbind(ratios_transf_bter, rep("bter",length(ratios_transf_bter)))
+# Change names
+col_names_plot_bter <- c("nAChRs", "bter_tpm", "bter_individual", "species")
+colnames(ratios_transf_bter) <- col_names_plot_bter
+#Remove repeating pattern in castes 
+ratios_transf_bter <- ratios_transf_bter %>% mutate_all(~gsub("abundance.|_w", "", .)) 
+# Make TPMs numeric
+ratios_transf_bter$bter_tpm <- as.numeric(ratios_transf_bter$bter_tpm)
+```
+```{r sort for regression, message = FALSE}
+
+# Sort by nAChRs
+ratios_transf_amel <- ratios_transf_amel[with(ratios_transf_amel, order(ratios_transf_amel$nAChRs, ratios_transf_amel$amel_individual)),]
+
+ratios_transf_bter <- ratios_transf_bter[with(ratios_transf_bter, order(ratios_transf_bter$nAChRs, ratios_transf_bter$bter_individual)),]
+# merge this col into one
+species <- dplyr::bind_cols(ratios_transf_amel, ratios_transf_bter)
+
+```
+```{r plots, message = FALSE}
+ggplot2::ggplot(species) + geom_abline(colour = "grey", linetype = "dashed") + 
+  #geom_boxplot(fill="white",aes(x=amel_tpm, y=bter_tpm, colour=nAChRs...1), orientation="y") + 
+  geom_point(size = 1.5, aes(amel_tpm, bter_tpm, colour=nAChRs...1)) + geom_smooth(colour = "black", size = 0.7, method="lm", se = FALSE, aes(bter_tpm, amel_tpm)) + ggtitle("Queens") +
+  xlab("Proportion of nAChRs expression in A. mellifera") +
+  ylab("Proportion of nAChRs expression in B. terrestris") +
+  theme(axis.title.x = element_text(colour="gray20", size=12),
+        axis.title.y = element_text(colour="gray20", size=12),
+        axis.text.x = element_text(colour="gray20", size=10),
+        axis.text.y = element_text(colour="gray20", size=10))
+
+
+amel_side <- ggplot(species, aes(x= amel_tpm, fill=nAChRs...1)) + 
+geom_histogram() 
+amel_side
+bter_side <- ggplot(species, aes(x= bter_tpm, fill=nAChRs...1)) + 
+geom_histogram() 
+bter_side
+```
+
+```{r plots, message = FALSE}
+
+test0 <- lm(species$amel_tpm ~ species$bter_tpm)
+test1 <- lm(species$amel_tpm ~ species$bter_tpm + species$nAChRs...1)
+
+summary(test1)
+anova(test1, test0)
+
+summary(test0)
+
+```
