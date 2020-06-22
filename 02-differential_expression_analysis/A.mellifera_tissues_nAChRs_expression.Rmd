@@ -1,0 +1,397 @@
+---
+title: "nAChRs expression in 9 tissues of Apis mellifera workers"
+author: "Alicja Witwicka"
+date: "23.04.2020"
+output:
+  github_document:
+    toc: yes
+  pdf_document: 
+    fig_caption: yes
+    toc: yes
+  html_document:
+    toc: yes
+number_sections: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.path = "")
+```
+```{r libraries, echo = FALSE, message = FALSE, warning = FALSE}
+renv::snapshot()
+```
+```{r libraries, echo = FALSE, message = FALSE, warning = FALSE}
+#Load all packages
+library("tximport")
+library("readr")
+library("ggplot2")
+library("DESeq2")
+library("dplyr")
+library("tibble")
+library("ggthemr")
+library("RColorBrewer")
+for (package in (.packages()) ) {
+ print(paste("Package", package, "version", packageVersion(package)))
+}
+
+# Set colour palletes 
+cbp1 <- cbp1 <- c("#6A6A6A", "#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+custom_theme <- ggthemr::define_palette(
+  swatch = cbp1,
+  gradient = c(lower = "#6A6A6A", upper = "#56B4E9"))
+ggthemr::ggthemr(custom_theme)
+```
+
+## Introduction
+
+# <b>Questions:</b>
+  1. Are nAChR subunits expressed in all 9 different tissues of A. mellifera.
+  2. What are the differences between tissues?
+  3. Which subunits are expressed in non-neuronal tissues?
+Datasets used:
+<br>-Jasper et al. 2015
+<br>    
+## Load data and prepare it fo analysis
+- The data was loaded using tximport, metadata (.csv) was composed and imported
+
+```{r import_files_&_metadata, include = FALSE}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+base_dir <- getwd()
+
+### Read kallisto output and metadata ###
+
+# Set sample identifiers using the names of the kallisto output directories
+sample_ids <- dir(file.path("kallisto_results_trimmed/tissue"))
+
+# Read metadata table
+samples_table <- read.csv(file.path("kallisto_results_trimmed/metadata", "tissue.csv"),
+     header = TRUE,
+       stringsAsFactors = TRUE)
+
+
+# Read .h5 files in
+filenames <- file.path(
+  "kallisto_results_trimmed/tissue",
+  samples_table$sample,
+  "abundance.h5")
+
+# Assign names to files
+names(filenames) <- samples_table$sample
+
+# check that all files were assigned 
+all(file.exists(filenames)) 
+```
+- I used biomaRt to associate transcripts to genes (from ensmbl metazoa)
+- I imported Kallisto output
+```{r biomaRt_tximport, include = FALSE}
+#### Associate transcripts to genes ####
+biomaRt::listMarts(host = "metazoa.ensembl.org")
+# biomaRt::listMarts(host = "eg40-metazoa.ensembl.org") # version 40
+# biomaRt::listEnsemblArchives()
+metazoa_mart <- biomaRt::useMart(
+  biomart = "metazoa_mart",
+  dataset = "amellifera_eg_gene",
+  host = "metazoa.ensembl.org")
+
+transcript_to_gene <- biomaRt::getBM(
+  attributes = c("ensembl_transcript_id", "ensembl_gene_id"),
+  mart = metazoa_mart)
+
+# Remove all biomaRt cached files
+#biomaRt::biomartCacheInfo()
+biomaRt::biomartCacheClear()
+#biomaRt::listAttributes(metazoa_mart)
+
+# Import kallisto quantifications
+txi_kallisto <- tximport::tximport(filenames,
+  type = "kallisto",
+  tx2gene = transcript_to_gene,
+  txOut = FALSE)
+
+```
+- I ran DESeq2
+```{r filtering, message = FALSE, warning = FALSE}
+
+# Set variables for the model (tissues)
+condition <- samples_table %>%
+  dplyr::pull(condition) %>%
+  unique() %>%
+  as.character()
+
+# Set the reference level: mitgut
+samples_table$condition <- relevel(
+  samples_table$condition,
+   ref = "mitgut")
+
+# Create a DESeq object (for mitgut comparison)
+dds <- DESeq2::DESeqDataSetFromTximport(txi_kallisto,
+                                        colData = samples_table,
+                                        design = ~ condition)
+# Select expressed genes
+
+# Show table of sample information
+colData(dds)
+# Show number of replicates per condition
+with(colData(dds), table(condition))
+# Estimate the size factors
+dds <- DESeq2::estimateSizeFactors(dds)
+# With tximport, we compute gene x sample normalization factors
+DESeq2::normalizationFactors(dds) %>% head()
+# Pre-filter the dataset
+dim(dds)
+keep <- rowSums(DESeq2::counts(dds) >= 10) >= 4
+dds <- dds[keep,]
+dim(dds)
+```
+```{r DESeq2_data, message = FALSE, warning = FALSE}
+
+# Run differential expression analyses
+dds1 <- DESeq2::DESeq(dds, test = "Wald", betaPrior = FALSE)
+DESeq2::resultsNames(dds1)
+
+# Create list of contrasts
+contrasts <- combn(x = condition, m = 2) %>%
+  t() %>%
+  as.data.frame.array() %>%
+  dplyr::rename(cond1 = V1, cond2 = V2) %>%
+  dplyr::mutate(contrast = paste0(cond1, "_vs_", cond2))
+
+res_contrasts <- list()
+for (row in 1:nrow(contrasts)) {
+  cond1 <- as.character(contrasts[row, "cond1"])
+  cond2 <- as.character(contrasts[row, "cond2"])
+  res_contrasts[[row]] <- DESeq2::results(
+    dds1,
+    contrast = c("condition", cond1, cond2),
+    lfcThreshold = 0,
+    alpha = 0.1,
+    pAdjustMethod = "BH"
+  )
+}
+names(res_contrasts) <- contrasts$contrast
+
+# Make vectors with selected genes of interest
+nachrs <- c("GB40923", "GB53053", "GB42644", 
+                    "GB53055", "GB47845", "GB43416", 
+                    "GB42850", "GB43275", "GB53427", 
+                    "GB53428", "GB50159")
+
+res_nachrs <- list()
+for (contrast in contrasts$contrast) {
+  res_nachrs[[contrast]] <- res_contrasts[[contrast]] %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column(var = "ens_gene") %>%
+    dplyr::mutate(contrast = contrast) %>%
+    dplyr::filter(ens_gene %in% nachrs) %>%
+    dplyr::mutate(subunit = case_when(
+      ens_gene == "GB40923" ~ "alpha8",
+      ens_gene == "GB53053" ~ "alpha7",
+      ens_gene == "GB42644" ~ "alpha3",
+      ens_gene == "GB53055" ~ "beta1",
+      ens_gene == "GB47845" ~ "alpha3",
+      ens_gene == "GB43416" ~ "alpha6",
+      ens_gene == "GB42850" ~ "alpha1",
+      ens_gene == "GB43275" ~ "alpha4",
+      ens_gene == "GB53427" ~ "alpha9",
+      ens_gene == "GB53428" ~ "beta2",
+      ens_gene == "GB50159" ~ "alpha5",
+    )) %>%
+    dplyr::mutate(regulation = ifelse(log2FoldChange > 0, "up", "down")) %>%
+    dplyr::mutate(significance = ifelse(padj < 0.05, "sig", "notsig")) %>%
+    dplyr::mutate_if(is.numeric, round, digits = 4)
+}
+res_nachrs <- dplyr::bind_rows(res_nachrs)
+res_nachrs
+
+table(res_nachrs$significance)
+table(res_nachrs$subunit, res_nachrs$significance)
+```
+
+## Data visualisation 
+(using VST and limma)
+
+```{r vst_heatmap, message = FALSE}
+# Calculate VST
+vst <- vst(dds, blind=FALSE)
+vst <- assay(vst)
+# Sellect genes of interest
+subset.vst <- vst[nachrs,]
+names_AChRs <- c("alpha8","alpha7","alpha2","beta1","alpha3",
+                     "alpha6","alpha1","alpha4","alpha9","beta2","alpha5")
+rownames(subset.vst) <- names_AChRs
+
+subset.vst <- as.data.frame(subset.vst)
+
+# Set row names as a column
+subset.vst <- subset.vst[ , order(names(subset.vst))]
+plot.vst <- subset.vst %>% tibble::rownames_to_column("AChRs")
+plot.vst<- data.frame(plot.vst[1], stack(plot.vst[2:54]))
+col_names_plot <- c("nAChRs", "vst", "tissue")
+colnames(plot.vst) <- col_names_plot
+
+# Add group collumn
+plot.vst <- plot.vst %>% mutate(group = tissue)
+plot.vst$group <- stringr::str_remove(plot.vst$group, "_1|_2|_3|_4|_5|_6")
+ 
+# Plot heatmap
+ggplot(plot.vst, aes(x=tissue, y=nAChRs, fill=vst)) + 
+  geom_tile(color="white") + 
+  scale_fill_gradient(low = "wheat", high = "turquoise4") + 
+  theme_minimal() + 
+  facet_grid(~group, switch = "x", scales = "free_x", space = "free_x") +
+ # theme(axis.text.x=element_text(angle=65, hjust=1)) 
+  xlab("tissues") +
+  ylab("nAChRs") +
+  theme(axis.title.x = element_text(colour="gray20", size=12),
+        axis.title.y = element_text(colour="gray20", size=12),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(colour="gray20", size=10)) + 
+  theme(strip.text.x = element_text(size = 10, color = "grey20", angle=90
+                                    , hjust = 1, vjust = 1))
+
+
+
+```
+
+
+```{r vst_boxplot, message = FALSE}
+# Plot boxplot
+bxp.vst <- plot.vst %>% mutate_all(~gsub("_1|_2|_3|_4|_5|_6", "", .))
+bxp.vst[,2] <- as.numeric(bxp.vst$vst)
+
+# Set colour palletes 
+custom_colors <- colorRampPalette(cbp1)(12)
+ggthemr::set_swatch(custom_colors)
+#
+ggplot(data=bxp.vst, aes(x=nAChRs, y=vst, fill=nAChRs)) + facet_grid(~ tissue) +
+  geom_boxplot() + ylab("vst") + xlab("tissues") + #theme_minimal() +
+  geom_jitter(size=1.2, pch=16, aes(colour=nAChRs), alpha=0.45) + 
+  scale_y_sqrt() + 
+  theme(axis.title.x = element_text(colour="gray20", size=12),
+        axis.title.y = element_text(colour="gray20", size=12),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(colour="gray20", size=10)) 
+#  scale_color_brewer(palette="Paired") +
+#  scale_fill_brewer(palette="Paired")
+```
+
+PCA: the biggest differences are visible in the neuronal structures and Nasonov's gland
+
+```{r vst_pca, message = FALSE}
+# Plot PCA
+
+# flip data frame
+flip.vst <- t(subset.vst)
+# perform pca
+pca_res <- prcomp(flip.vst, scale.=FALSE)
+summary(pca_res)
+# transform data frame for ggplot2
+# call out another dimention from pca output
+res_out <- as.data.frame(pca_res$x)
+# rownames to column to get another variable to manipulate colours in ggplot2
+res_out_pca <- res_out %>% rownames_to_column("tissue")
+# remove redundant digits 
+res_out_pca <- res_out_pca %>% mutate_all(~gsub("_1|_2|_3|_4|_5|_6", "", .))
+#change to numeric 
+sapply(res_out_pca, mode)
+res_out_pca <- transform(res_out_pca, PC1 = as.numeric(PC1), 
+                         PC2 = as.numeric(PC2), PC3 = as.numeric(PC3), PC4 = as.numeric(PC4))
+# Set colour palletes 
+custom_colors <- colorRampPalette(cbp1)(10)
+ggthemr::set_swatch(custom_colors)
+#
+ggplot(res_out_pca, aes(x=PC1, y=PC2, colour=tissue)) + 
+  geom_point() + theme_classic() +
+  theme(axis.title.x = element_text(colour="gray20", size=12),
+        axis.title.y = element_text(colour="gray20", size=12),
+        axis.text.x = element_text(colour="gray20", size=10),
+        axis.text.y = element_text(colour="gray20", size=10))
+
+```
+```{r abundances, include = FALSE}
+# Extract abundances from the imported list and make it a data frame
+abundances <- txi_kallisto["abundance"]
+abundances <- as.data.frame(abundances)
+
+# Extract genes of interest
+gene_list <- abundances[nachrs,]
+row.names(gene_list) <- names_AChRs
+
+```
+# Normalising TPMs
+
+```{r normalisation, message = FALSE}
+# Calculate sums of each collumn
+col_sum <- gene_list %>% dplyr::summarize_if(is.numeric, sum)
+col_sum
+
+ratios <- mapply('/', gene_list, col_sum)
+row.names(ratios) <- names_AChRs
+ratios
+```
+
+
+# Plotting the data
+
+```{r visualisation, message = FALSE}
+# Transform data frame
+ratios <- as.data.frame(ratios)
+ratios_transf <- ratios[ , order(names(ratios))]
+plot.list <- ratios_transf %>% tibble::rownames_to_column("AChRs")
+ncol(plot.list)
+plot.list <- data.frame(plot.list[1], stack(plot.list[2:54]))
+col_names_plot <- c("nAChRs", "tpm", "tissue")
+colnames(plot.list) <- col_names_plot
+
+#Remove repeating pattern in tissue names
+plot.list <- plot.list %>% mutate_all(~gsub("abundance.|_1|_2|_3|_4|_5|_6", "", .))
+# Make TPMs numeric
+plot.list$tpm <- as.numeric(plot.list$tpm)
+
+# Set colour palletes 
+cbp1 <- cbp1 <- c("#6A6A6A", "#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+custom_theme <- ggthemr::define_palette(
+  swatch = cbp1,
+  gradient = c(lower = "#6A6A6A", upper = "#56B4E9"))
+ggthemr::ggthemr(custom_theme)
+custom_colors <- colorRampPalette(cbp1)(12)
+ggthemr::set_swatch(custom_colors)
+
+
+# Plot data
+ggplot(plot.list, aes(x=tissue, y=tpm, fill=nAChRs)) +
+geom_bar(width = 0.7, stat = "identity", position = "fill") + 
+  xlab("tissue") +
+  ylab("normalised TPM") +
+  theme(axis.title.x = element_text(colour="gray20", size=12),
+        axis.title.y = element_text(colour="gray20", size=12),
+        axis.text.x = element_text(colour="gray20", size=10, angle=65, hjust=1),
+        axis.text.y = element_text(colour="gray20", size=10)) 
+# theme_classic() + scale_fill_brewer(palette="Paired") +
+
+
+
+```
+# I use logistic regression to calculate p values for this model
+
+```{r logit, message = FALSE}
+
+
+# Rearrange references 
+replace_brain <- plot.list %>% mutate(tissue = ifelse(as.character(tissue) == "brain", "aabrain", as.character(tissue)))
+replace_a8 <- replace_brain %>% mutate(nAChRs = ifelse(as.character(nAChRs) == "alpha8", "aalpha8", as.character(nAChRs)))
+
+logistic <- glm(tpm ~ nAChRs*tissue, data = replace_a8, family = quasibinomial(link="logit"))
+summary(logistic)
+# Turn glm results into a tidy tibble
+broom::tidy(logistic)
+# Look at the diagnostics
+broom::glance(logistic)
+# Return a tibble with information about data points
+broom::augment(logistic)
+
+```
+
+
+

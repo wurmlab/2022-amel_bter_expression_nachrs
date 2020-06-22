@@ -103,19 +103,19 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 base_dir <- getwd()
 
 # Create directory for results
-dir.create("results/colgan", recursive = TRUE)
+dir.create("results/harrison", recursive = TRUE)
 
 # Set sample identifiers using the names of the kallisto output directories
 sample_ids <- dir(file.path(
   base_dir,
-  "2019_colgan_queen-worker_head/2020-05-06-kallisto"
+  "2015_harrison_queen-worker_whole_body/2020-05-06-kallisto"
 ))
 
 # Read metadata table
 samples_table <- read.csv(
   file.path(
-    base_dir, "2019_colgan_queen-worker_head",
-    "2019_colgan_queen-worker_head_metadata.csv"
+    base_dir, "2015_harrison_queen-worker_whole_body",
+    "2015_harrison_queen-worker_whole_body_metadata.csv"
   ),
   header = TRUE,
   stringsAsFactors = TRUE
@@ -123,14 +123,14 @@ samples_table <- read.csv(
 
 colnames(samples_table)
 
-samples_table$caste <- relevel(
-  samples_table$caste,
-  ref = "queen"
+samples_table$condition <- relevel(
+  samples_table$condition,
+  ref = "worker_larva"
 )
 
 input_files <- file.path(
   base_dir,
-  "2019_colgan_queen-worker_head/2020-05-06-kallisto",
+  "2015_harrison_queen-worker_whole_body/2020-05-06-kallisto",
   samples_table$sample,
   "abundance.h5"
 )
@@ -178,10 +178,9 @@ txi <- tximport::tximport(input_files,
 )
 
 # Create a DESeqDataSet object
-# The design below includes the batch factor "block"
 dds <- DESeq2::DESeqDataSetFromTximport(txi,
   colData = samples_table,
-  design = ~ block + ct.room + caste
+  design = ~condition
 )
 ```
 
@@ -199,71 +198,53 @@ dds <- DESeq2::estimateSizeFactors(dds)
 DESeq2::normalizationFactors(dds) %>% head()
 
 # Choose the reference level
-dds$caste <- relevel(dds$caste, ref = "worker")
+dds$condition <- relevel(dds$condition, ref = "worker_larva")
 
 # Pre-filter the dataset
 nrow(dds)
 # 10661
-# At least 4 samples with a count of 10 or higher
+# At least 3 samples with a count of 10 or higher
 # The number of samples would be set to the smallest group size
-keep <- rowSums(DESeq2::counts(dds) >= 10) >= 4
+keep <- rowSums(DESeq2::counts(dds) >= 10) >= 3
 dds <- dds[keep, ]
 nrow(dds)
-# 9139
+# 9916
 ```
 
 # Differential gene expression analysis
-## Run `DESeq2` pipeline
+## Run `DESeq2` pipeline with all groups together
 ```{r}
 # Run DESeq2 pipeline
 dds <- DESeq2::DESeq(dds, test = "Wald", betaPrior = FALSE)
 DESeq2::resultsNames(dds)
 
-# Extract results
-res <- DESeq2::results(
-  dds,
-  contrast = c("caste", "queen", "worker"),
-  lfcThreshold = 0,
-  alpha = 0.1,
-  pAdjustMethod = "BH"
-)
+conditions <- samples_table %>%
+  dplyr::pull(condition) %>%
+  unique() %>%
+  as.character()
 
-DESeq2::summary(res)
+# Create list of contrasts
+contrasts <- combn(x = conditions, m = 2) %>%
+  t() %>%
+  as.data.frame.array() %>%
+  dplyr::rename(cond1 = V1, cond2 = V2) %>%
+  dplyr::mutate(contrast = paste0(cond1, "_vs_", cond2))
+contrasts
 
-lfc <- DESeq2::lfcShrink(
-  dds,
-  coef = "caste_queen_vs_worker",
-  type = "apeglm",
-  lfcThreshold = 0,
-)
+res_contrasts <- list()
+for (row in 1:nrow(contrasts)) {
+  cond1 <- as.character(contrasts[row, "cond1"])
+  cond2 <- as.character(contrasts[row, "cond2"])
+  res_contrasts[[row]] <- DESeq2::results(
+    dds,
+    contrast = c("condition", cond1, cond2),
+    lfcThreshold = 0,
+    alpha = 0.1,
+    pAdjustMethod = "BH"
+  )
+}
 
-DESeq2::summary(lfc)
-
-# Create data frames
-lfc_df <- lfc %>%
-  as.data.frame() %>%
-  tibble::rownames_to_column(var = "ens_gene") %>%
-  dplyr::mutate_if(is.numeric, round, digits = 4)
-
-sig_df <- lfc %>%
-  as.data.frame() %>%
-  tibble::rownames_to_column(var = "ens_gene") %>%
-  dplyr::filter(padj < 0.05) %>%
-  dplyr::mutate_if(is.numeric, round, digits = 4)
-```
-
-## Write tables of `DESeq2` Wald test results.
-```{r}
-# Write results tables
-write.csv(lfc_df,
-  file = "results/colgan/deseq2_wald_lfc.csv",
-  row.names = FALSE
-)
-
-write.csv(sig_df,
-  file = "results/colgan/deseq2_wald_lfc-sig.csv",
-  row.names = FALSE
-)
+names(res_contrasts) <- contrasts$contrast
 
 nachrs <- c(
   "LOC100643274", "LOC100643282", "LOC100645032", "LOC100646787",
@@ -271,59 +252,56 @@ nachrs <- c(
   "LOC100649515", "LOC100649612", "LOC100649796"
 )
 
-res_nachrs <- res %>%
-  as.data.frame() %>%
-  tibble::rownames_to_column(var = "ens_gene") %>%
-  dplyr::filter(ens_gene %in% nachrs) %>%
-  dplyr::mutate(subunit = case_when(
-    ens_gene == "LOC100643274" ~ "alpha6",
-    ens_gene == "LOC100643282" ~ "alpha8",
-    ens_gene == "LOC100645032" ~ "alpha4",
-    ens_gene == "LOC100646787" ~ "beta2",
-    ens_gene == "LOC100647301" ~ "alpha2",
-    ens_gene == "LOC100647350" ~ "alpha3",
-    ens_gene == "LOC100647624" ~ "alpha1",
-    ens_gene == "LOC100648987" ~ "alpha4e5",
-    ens_gene == "LOC100649515" ~ "alpha5",
-    ens_gene == "LOC100649612" ~ "beta1",
-    ens_gene == "LOC100649796" ~ "alpha7",
-  )) %>%
-  dplyr::mutate(regulation = ifelse(log2FoldChange > 0, "up", "down")) %>%
-  dplyr::mutate(significance = ifelse(padj < 0.05, "sig", "notsig")) %>%
-  dplyr::mutate(contrast = "queen_vs_worker") %>%
-  dplyr::mutate_if(is.numeric, round, digits = 4)
+res_nachrs <- list()
+for (contrast in contrasts$contrast) {
+  res_nachrs[[contrast]] <- res_contrasts[[contrast]] %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column(var = "ens_gene") %>%
+    dplyr::mutate(contrast = contrast) %>%
+    dplyr::filter(ens_gene %in% nachrs) %>%
+    dplyr::mutate(subunit = case_when(
+      ens_gene == "LOC100643274" ~ "alpha6",
+      ens_gene == "LOC100643282" ~ "alpha8",
+      ens_gene == "LOC100645032" ~ "alpha4",
+      ens_gene == "LOC100646787" ~ "beta2",
+      ens_gene == "LOC100647301" ~ "alpha2",
+      ens_gene == "LOC100647350" ~ "alpha3",
+      ens_gene == "LOC100647624" ~ "alpha1",
+      ens_gene == "LOC100648987" ~ "alpha4e5",
+      ens_gene == "LOC100649515" ~ "alpha5",
+      ens_gene == "LOC100649612" ~ "beta1",
+      ens_gene == "LOC100649796" ~ "alpha7",
+    )) %>%
+    dplyr::mutate(regulation = ifelse(log2FoldChange > 0, "up", "down")) %>%
+    dplyr::mutate(significance = ifelse(padj < 0.05, "sig", "notsig")) %>%
+    dplyr::mutate_if(is.numeric, round, digits = 4)
+}
 
+res_nachrs <- dplyr::bind_rows(res_nachrs)
+res_nachrs
+
+# Write table of `DESeq2` Wald test results
 write.csv(res_nachrs,
-  file = "results/colgan/deseq2_wald_res-nachrs.csv",
+  file = "results/harrison/deseq2_wald_res-nachrs.csv",
   row.names = FALSE
 )
 
-lfc_nachrs <- lfc %>%
-  as.data.frame() %>%
-  tibble::rownames_to_column(var = "ens_gene") %>%
-  dplyr::filter(ens_gene %in% nachrs) %>%
-  dplyr::mutate(subunit = case_when(
-    ens_gene == "LOC100643274" ~ "alpha6",
-    ens_gene == "LOC100643282" ~ "alpha8",
-    ens_gene == "LOC100645032" ~ "alpha4",
-    ens_gene == "LOC100646787" ~ "beta2",
-    ens_gene == "LOC100647301" ~ "alpha2",
-    ens_gene == "LOC100647350" ~ "alpha3",
-    ens_gene == "LOC100647624" ~ "alpha1",
-    ens_gene == "LOC100648987" ~ "alpha4e5",
-    ens_gene == "LOC100649515" ~ "alpha5",
-    ens_gene == "LOC100649612" ~ "beta1",
-    ens_gene == "LOC100649796" ~ "alpha7",
-  )) %>%
-  dplyr::mutate(regulation = ifelse(log2FoldChange > 0, "up", "down")) %>%
-  dplyr::mutate(significance = ifelse(padj < 0.05, "sig", "notsig")) %>%
-  dplyr::mutate(contrast = "queen_vs_worker") %>%
-  dplyr::mutate_if(is.numeric, round, digits = 4)
+table(res_nachrs$significance)
+# not_sig     sig
+#     116      34
 
-write.csv(lfc_nachrs,
-  file = "results/colgan/deseq2_wald_lfc-nachrs.csv",
-  row.names = FALSE
-)
+table(res_nachrs$subunit, res_nachrs$significance)
+#          notsig sig
+# alpha1       11   4
+# alpha2        9   6
+# alpha3       14   1
+# alpha4e5      7   8
+# alpha5       12   3
+# alpha6       12   3
+# alpha7       13   2
+# alpha8       15   0
+# beta1        12   3
+# beta2        11   4
 ```
 
 # Data transformation and quality assessment
@@ -345,26 +323,14 @@ vsn::meanSdPlot(assay(vsd))
 # the case of datasets with many true differences due to the experimental
 # conditions."
 ggsave(
-  filename = "results/colgan/bterrestris_kallisto-deseq2_vst-meanSdPlot.pdf",
+  filename = "results/harrison/bterrestris_kallisto-deseq2_vst-meanSdPlot.pdf",
   width = 5,
   height = 4,
   units = "in"
 )
 ```
 
-## Remove batch effects using `limma`'s `removeBatchEffect()` function
-```{r}
-# Removes any shifts in the log2-scale expression data that can be
-# explained by batch
-# Here "design" relates to "treatment conditions to be preserved, usually the
-# design matrix with all experimental factors other than the batch effects."
-mod <- model.matrix(~ 0 + caste, data = samples_table)
-mat <- assay(vsd)
-mat <- limma::removeBatchEffect(mat, batch = vsd$block, design = mod)
-assay(vsd) <- mat
-```
-
-## Plot the (VST) transformed counts with batch variation removed
+## Plot the (VST) transformed counts
 ```{r}
 # Create a tidy data frame with the transformed counts
 vst_nachrs <- assay(vsd) %>%
@@ -386,18 +352,24 @@ vst_nachrs <- assay(vsd) %>%
     ens_gene == "LOC100649612" ~ "beta1",
     ens_gene == "LOC100649796" ~ "alpha7",
   )) %>%
-  dplyr::mutate(caste = case_when(
-    grepl("worker", sample) ~ "worker",
-    grepl("queen", sample) ~ "queen"
+  dplyr::mutate(condition = case_when(
+    grepl("queen_adult", sample) ~ "queen_adult",
+    grepl("queen_larva", sample) ~ "queen_larva",
+    grepl("worker_adult_repr", sample) ~ "worker_adult_repr",
+    grepl("worker_adult_undet", sample) ~ "worker_adult_undet",
+    grepl("worker_larva", sample) ~ "worker_larva",
+    grepl("worker_pupa", sample) ~ "worker_pupa"
   )) %>%
   dplyr::mutate_if(is.numeric, round, digits = 4)
 
 head(vst_nachrs)
 
 # Boxplots of transformed counts
-contrast_colors <- c("#E69F00", "#56B4E9")
+condition_colors <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#E6D72A", 
+  "#F18D9E")
 
-ggplot(vst_nachrs, aes(x = caste, y = vst_count, color = caste, fill = caste)) +
+ggplot(vst_nachrs, aes(x = condition, y = vst_count, 
+  color = condition, fill = condition)) +
   geom_boxplot(
     alpha = 0.6,
     width = 0.4,
@@ -419,71 +391,29 @@ ggplot(vst_nachrs, aes(x = caste, y = vst_count, color = caste, fill = caste)) +
     # axis.text = element_text(size = 12),
     axis.text.x = element_blank(),
     # axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
+    legend.text = element_text(size = 12),
     panel.spacing.x = unit(2, "mm"),
     legend.position = "bottom"
   ) +
   labs(
-    x = "Caste",
-    y = expression(paste("Log"[2], " (VST) transformed count")) # batch variation removed
+    x = "Condition",
+    y = expression(paste("Log"[2], " (VST) transformed count"))
   ) +
-  scale_fill_manual(name = "Caste", values = contrast_colors) +
-  scale_color_manual(name = "Caste", values = contrast_colors) +
-  facet_wrap(~subunit, ncol = 10) +
+  scale_fill_manual(name = "condition", values = condition_colors) +
+  scale_color_manual(name = "condition", values = condition_colors) +
+  facet_wrap(~subunit, ncol = 10) #+
   # ylim(NA, 10.5) +
   # scale_y_continuous(breaks = seq(6, 20, 1)) +
-  ggsignif::geom_signif(
-    comparisons = list(c("queen", "worker")),
-    map_signif_level = TRUE, color = "#6A6A6A"
+  # ggsignif::geom_signif(
+  #   comparisons = list(c("queen_adult", "queen_larva")),
+  #   map_signif_level = TRUE, color = "#6A6A6A"
     # size = 1, textsize = 4, vjust = 0, y_position = 10
-  )
+  # )
 
 ggsave(
-  filename = "results/colgan/bterrestris_kallisto_vst-nachrs_boxplots.pdf",
+  filename = "results/harrison/bterrestris_kallisto_vst-nachrs_boxplots.pdf",
   width = 10,
   height = 5,
-  units = "in"
-)
-```
-
-## Heatmap of the count matrix and clustering
-```{r}
-# Estimate variance of normalized counts for each gene, select top 50
-select <- order(rowVars(counts(dds, normalized = TRUE)),
-  decreasing = TRUE
-)[1:50]
-
-annotation <- as.data.frame(colData(dds)[, c(
-  "caste",
-  "block"
-)])
-
-annotation
-colnames(annotation) <- c("Caste", "Block")
-
-# Set colors
-caste_colors <- list("Caste" = c(queen = "#E69F00", worker = "#56B4E9"))
-block_colors <- list("Block" = c(block_1 = "#009E73", block_2 = "#F0E442"))
-annot_colors <- c(caste_colors, block_colors)
-
-# Plot the top 50 genes using the VST counts
-vsd_pheatmap <- pheatmap::pheatmap(assay(vsd)[select, ],
-  border_color = NA,
-  cluster_rows = FALSE,
-  cluster_cols = TRUE,
-  show_rownames = TRUE,
-  show_colnames = FALSE,
-  annotation_col = annotation,
-  fontsize = 10,
-  fontsize_row = 8,
-  fontface = "plain",
-  treeheight_col = 30,
-  annotation_colors = annot_colors
-)
-
-ggsave(vsd_pheatmap,
-  filename = "results/colgan/bterrestris_kallisto-deseq2_vst-counts_top50_pheatmap.pdf",
-  width = 4,
-  height = 6,
   units = "in"
 )
 ```
@@ -491,7 +421,7 @@ ggsave(vsd_pheatmap,
 ## Principal component plot of the samples
 ```{r}
 pca_data <- DESeq2::plotPCA(vsd,
-  intgroup = "caste",
+  intgroup = "condition",
   n = 500,
   returnData = TRUE
 )
@@ -499,8 +429,9 @@ pca_data <- DESeq2::plotPCA(vsd,
 # Customize PCA plot
 percent_var <- round(100 * attr(pca_data, "percentVar"))
 
-ggplot(pca_data, aes(x = PC1, y = PC2, color = caste)) +
-  geom_point(size = 4) +
+ggplot(pca_data, aes(x = PC1, y = PC2, color = condition, shape = condition)) +
+  geom_point(size = 4, alpha = 0.8) +
+  # geom_point(size = 4, stroke = 1, shape = 21) +
   xlab(paste0("PC1 [", percent_var[1], "%]")) +
   ylab(paste0("PC2 [", percent_var[2], "%]")) +
   coord_fixed(ratio = 1) +
@@ -509,10 +440,12 @@ ggplot(pca_data, aes(x = PC1, y = PC2, color = caste)) +
     legend.text = element_text(size = 12),
     axis.title = element_text(size = 14),
     axis.text = element_text(size = 12)
-  )
+  ) +
+  scale_fill_manual(name = "condition", values = condition_colors) +
+  scale_color_manual(name = "condition", values = condition_colors) +
 
 ggsave(
-  filename = "results/colgan/bterrestris_kallisto-deseq2_vst-pca.pdf",
+  filename = "results/harrison/bterrestris_kallisto-deseq2_vst-pca.pdf",
   width = 6,
   height = 4,
   units = "in"
