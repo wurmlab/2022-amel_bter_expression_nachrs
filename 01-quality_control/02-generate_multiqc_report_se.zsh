@@ -27,12 +27,12 @@ then
         "2015-liberti_queen_brains"
         "2015-manfredini_queen_brains"
         )
-    echo "Processing honey bee data sets: ${DATASETS}"
+    echo "Processing honey bee data sets: " "${DATASETS[@]}"
 else
     DATASETS=(
         "2015-harrison_queen_worker_whole_body"
         )
-    echo "Processing bumble bee data sets: ${DATASETS}"
+    echo "Processing bumble bee data sets: " "${DATASETS[@]}"
 fi
 
 # Create symbolic links for "input", "softw", and "tmp" directories
@@ -41,23 +41,23 @@ ln -sfn ../softw .
 ln -sfn ../tmp .
 
 # Run FastQC, STAR, and Qualimap
-for dataset in ${DATASETS}; do
-    mkdir ${dataset}
-    cd ${dataset}
+for dataset in "${DATASETS[@]}"; do
+    mkdir "${dataset}"
+    cd "${dataset}" || exit
 
     # Run FastQC
-    echo "Running FastQC with data set "${dataset}
+    echo "Running FastQC with data set ""${dataset}"
     mkdir ${DATE}-fastqc
-    cd ${DATE}-fastqc
-    parallel -j 8 'fastqc {}' ::: ../../input/${dataset}/*.fastq.gz > fastqc.log 2>&1
-    mv ../../input/${dataset}/*.{zip,html} .
+    cd ${DATE}-fastqc || exit
+    parallel -j 8 'fastqc {}' ::: ../../input/"${dataset}"/*.fastq.gz > fastqc.log 2>&1
+    mv ../../input/"${dataset}"/*.{zip,html} .
     echo "Finished running FastQC"
     cd ..
 
     # Run STAR
-    echo "Running STAR with data set "${dataset}
+    echo "Running STAR with data set ""${dataset}"
     mkdir ${DATE}-star
-    cd ${DATE}-star
+    cd ${DATE}-star || exit
     
     if [ ${SPECIES} = "Amel" ]
     then
@@ -71,9 +71,9 @@ for dataset in ${DATASETS}; do
     mkdir ${SCRATCH}/${DATE}
     ln -s ${SCRATCH}/${DATE} tmp
     mkdir -p tmp/star
-    for file in ../../input/${dataset}/*.fastq.gz; do
+    for file in ../../input/"${dataset}"/*.fastq.gz; do
         echo "Writing STAR commands for ${file}"
-        output=tmp/star/$(basename $file .fastq.gz)
+        output=tmp/star/$(basename "$file" .fastq.gz)
         echo "STAR --runThreadN 2 --genomeDir ./star_index/ --readFilesCommand zcat \
         --outFileNamePrefix=${output}. --outTmpDir=${output} \
         --readFilesIn $file" >> ./star_commands.sh
@@ -82,7 +82,7 @@ for dataset in ${DATASETS}; do
     echo "Finished running STAR commands"
 
     # Convert SAM files to sorted BAM
-    echo "Creating BAM files with data set "${dataset}
+    echo "Creating BAM files with data set ""${dataset}"
     parallel -j 8 'samtools view -@ 4 -bS {} | \
     samtools sort -@ 4 - -o {.}.sorted.bam' ::: tmp/star/*.sam > samtools.log 2>&1
     echo "Finished creating BAM files"
@@ -90,13 +90,13 @@ for dataset in ${DATASETS}; do
     cd ..
 
     # Run Qualimap
-    echo "Running Qualimap with data set "${dataset}
+    echo "Running Qualimap with data set ""${dataset}"
     module unload fastqc/0.11.9
     module unload java
     module load qualimap/2.2.1
 
     mkdir ${DATE}-qualimap
-    cd ${DATE}-qualimap
+    cd ${DATE}-qualimap || exit
     ln -s ${SCRATCH}/${DATE}/star star
     if [ ${SPECIES} = "Amel" ]
     then
@@ -115,9 +115,9 @@ for dataset in ${DATASETS}; do
     cd ..
 
     # Run kallisto
-    echo "Running kallisto with data set "${dataset}
+    echo "Running kallisto with data set ""${dataset}"
     mkdir ${DATE}-kallisto
-    cd ${DATE}-kallisto
+    cd ${DATE}-kallisto || exit
     ln -s ../../softw/kallisto/kallisto kallisto
     ln -s ${SCRATCH}/${DATE} tmp
     mkdir -p tmp/kallisto
@@ -131,9 +131,9 @@ for dataset in ${DATASETS}; do
         ln -s ../../tmp/Bter_kallisto_index/Bter_kallisto.idx kallisto_index
     fi
 
-    for file in ../../input/${dataset}/*.fastq.gz; do
+    for file in ../../input/"${dataset}"/*.fastq.gz; do
         echo "Writing kallisto commands for ${file}"
-        output=tmp/kallisto/$(basename $file .fastq.gz)
+        output=tmp/kallisto/$(basename "$file" .fastq.gz)
         echo "./kallisto quant -i kallisto_index --bias --bootstrap-sample=100 \
         --output-dir=${output} --single --fragment-length=300 --sd=20 \
         --threads=2 ${file}" >> ./kallisto_commands.sh
@@ -148,18 +148,18 @@ for dataset in ${DATASETS}; do
     # Delete BAM files in STAR results
     rm ${DATE}-star/tmp/star/*.bam
     # Move other STAR output files to STAR results directory
-    cd ${DATE}-star
+    cd ${DATE}-star || exit
     mkdir results
     mv tmp/star/* results/
     # Remove temporary directories
-    rm -r tmp ${SCRATCH}/${DATE}
+    rm -r tmp ${SCRATCH:?}/${DATE}
     cd ..
 
     # Generate MultiQC report
     multiqc .
     # Rename MultiQC report and data
-    mv multiqc_report.html ${dataset}-multiqc_report.html
-    mv multiqc_data ${dataset}-multiqc_data
+    mv multiqc_report.html "${dataset}"-multiqc_report.html
+    mv multiqc_data "${dataset}"-multiqc_data
     cd ..
 
     module unload qualimap/2.2.1
