@@ -33,14 +33,14 @@ gzip -d Bombus_terrestris.Bter_1.0.47.gtf.gz
 ln -s Bombus_terrestris.Bter_1.0.47.gtf Bter.gtf
 
 echo "Building STAR indexes"
-for species in ${SPECIES}; do
-    mkdir ${species}_star_index
-    cd ${species}_star_index
+for species in "${SPECIES[@]}"; do
+    mkdir "${species}"_star_index
+    cd "${species}"_star_index || exit
     STAR --runThreadN 8 --runMode genomeGenerate \
     --genomeDir . \
-    --genomeFastaFiles ../${species}.dna.fa \
-    --sjdbGTFfile ../${species}.gtf \
-    --sjdbOverhang 100 > ${species}_star_index.log 2>&1
+    --genomeFastaFiles ../"${species}".dna.fa \
+    --sjdbGTFfile ../"${species}".gtf \
+    --sjdbOverhang 100 > "${species}"_star_index.log 2>&1
     cd ..
 done
 echo "Finished building STAR indexes"
@@ -59,11 +59,11 @@ ln -s Bombus_terrestris.Bter_1.0.cdna.all.fa Bter.cdna.fa
 # Build kallisto index
 ln -s ../softw/kallisto/kallisto kallisto
 echo "Building kallisto indexes"
-for species in ${SPECIES}; do
-    mkdir ${species}_kallisto_index
-    cd ${species}_kallisto_index
-    ../kallisto index -i ${species}_kallisto.idx ../${species}.cdna.fa > \
-    ${species}_kallisto_index.log 2>&1
+for species in "${SPECIES[@]}"; do
+    mkdir "${species}"_kallisto_index
+    cd "${species}"_kallisto_index || exit
+    ../kallisto index -i "${species}"_kallisto.idx ../"${species}".cdna.fa > \
+    "${species}"_kallisto_index.log 2>&1
     cd ..
 done
 echo "Finished building kallisto indexes"
