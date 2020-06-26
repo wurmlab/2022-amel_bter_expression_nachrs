@@ -21,20 +21,20 @@ BTERDATASETS=(
     "2019-porath_worker_brain"
     )
 
-echo "Creating symbolic links for honey bee data sets: ${AMELDATASETS}"
-for dataset in ${AMELDATASETS}; do
+echo "Creating symbolic links for honey bee data sets: " "${AMELDATASETS[@]}"
+for dataset in "${AMELDATASETS[@]}"; do
     echo "Creating symbolic links for dataset ${dataset}"
-    mkdir ${dataset}
-    cd ${dataset}
-    ln -s /data/SBCS-WurmLab/archive/db/rna/reads/Apis_mellifera/${dataset}/renamed/*.fastq.gz .
+    mkdir "${dataset}"
+    cd "${dataset}" || exit
+    ln -s /data/SBCS-WurmLab/archive/db/rna/reads/Apis_mellifera/"${dataset}"/renamed/*.fastq.gz .
     cd ..
 done
 
-echo "Creating symbolic links for bumble bee data sets: ${BTERDATASETS}"
-for dataset in ${BTERDATASETS}; do
+echo "Creating symbolic links for bumble bee data sets: " "${BTERDATASETS[@]}"
+for dataset in "${BTERDATASETS[@]}"; do
     echo "Creating symbolic links for dataset ${dataset}"
-    mkdir ${dataset}
-    cd ${dataset}
-    ln -s /data/SBCS-WurmLab/archive/db/rna/reads/Bombus_terrestris/${dataset}/*.fastq.gz .
+    mkdir "${dataset}"
+    cd "${dataset}" || exit
+    ln -s /data/SBCS-WurmLab/archive/db/rna/reads/Bombus_terrestris/"${dataset}"/*.fastq.gz .
     cd ..
 done
