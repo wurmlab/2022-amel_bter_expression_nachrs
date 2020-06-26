@@ -16,7 +16,6 @@ module load star/2.7.0f
 module load samtools/1.9
 
 # Execute script within "results" directory
-SPECIES="Bter"
 DATASET="2019-colgan_queen_worker_head"
 DATE="2020-06-16"
 SCRATCH="/data/scratch/btx422" # Set to user scratch
@@ -28,12 +27,12 @@ ln -sfn ../tmp .
 
 # Run FastQC, STAR, and Qualimap
 mkdir ${DATASET}
-cd ${DATASET}
+cd ${DATASET} || exit
 
 # Run FastQC
 echo "Running FastQC with data set "${DATASET}
 mkdir ${DATE}-fastqc
-cd ${DATE}-fastqc
+cd ${DATE}-fastqc || exit
 parallel -j 8 'fastqc {}' ::: ../../input/${DATASET}/*.fastq.gz > fastqc.log 2>&1
 mv ../../input/${DATASET}/*.{zip,html} .
 echo "Finished running FastQC"
@@ -42,16 +41,16 @@ cd ..
 # Run STAR
 echo "Running STAR with data set "${DATASET}
 mkdir ${DATE}-star
-cd ${DATE}-star
+cd ${DATE}-star || exit
 echo "Creating symbolic link for bumble bee index"
 ln -s ../../tmp/Bter_star_index star_index
 
 mkdir ${SCRATCH}/${DATE}
 ln -s ${SCRATCH}/${DATE} tmp
 mkdir -p tmp/star
-for file in ../../input/${DATASET}/*.fastq.gz; do
+for file in ../../input/"${DATASET}"/*.fastq.gz; do
     echo "Writing STAR commands for ${file}"
-    output=tmp/star/$(basename $file .fastq.gz)
+    output=tmp/star/$(basename "$file" .fastq.gz)
     echo "STAR --runThreadN 2 --genomeDir ./star_index/ --readFilesCommand zcat \
     --outFileNamePrefix=${output}. --outTmpDir=${output} \
     --readFilesIn $file" >> ./star_commands.sh
@@ -69,13 +68,13 @@ rm tmp/star/*.sam
 cd ..
 
 # Run Qualimap
-echo "Running Qualimap with data set "${dataset}
+echo "Running Qualimap with data set ""${DATASET}"
 module unload fastqc/0.11.9
 module unload java
 module load qualimap/2.2.1
 
 mkdir ${DATE}-qualimap
-cd ${DATE}-qualimap
+cd ${DATE}-qualimap || exit
 ln -s ${SCRATCH}/${DATE}/star star
 GTF="../../tmp/Bombus_terrestris.Bter_1.0.47.gtf"
 export GTF
@@ -91,7 +90,7 @@ cd ..
 # Run kallisto
 echo "Running kallisto with data set "${DATASET}
 mkdir ${DATE}-kallisto
-cd ${DATE}-kallisto
+cd ${DATE}-kallisto || exit
 ln -s ../../softw/kallisto/kallisto kallisto
 ln -s ${SCRATCH}/${DATE} tmp
 mkdir -p tmp/kallisto
@@ -99,7 +98,7 @@ echo "Creating symbolic link for bumble bee index"
 ln -s ../../tmp/Bter_kallisto_index/Bter_kallisto.idx kallisto_index
 colonies_castes=(C61_queen C48_queen C34_queen C06_queen C06_worker C61_worker C48_worker C34_worker)
 
-for sample in $colonies_castes; do
+for sample in "${colonies_castes[@]}"; do
     echo "Running with ${sample}"
     fastqs=$(find ../../input/${DATASET}/ -name "*${sample}*.fastq.gz" | tr "\n" " ")
     output=tmp/kallisto/${sample}"_head"
@@ -118,11 +117,11 @@ cd ..
 # Delete BAM files in STAR results
 rm ${DATE}-star/tmp/star/*.bam
 # Move other STAR output files to STAR results directory
-cd ${DATE}-star
+cd ${DATE}-star || exit
 mkdir results
 mv tmp/star/* results/
 # Remove temporary directories
-rm -r tmp ${SCRATCH}/${DATE}
+rm -r tmp ${SCRATCH:?}/${DATE}
 cd ..
 
 # Generate MultiQC report
