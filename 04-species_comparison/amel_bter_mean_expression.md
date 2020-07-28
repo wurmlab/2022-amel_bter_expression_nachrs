@@ -18,6 +18,10 @@ Federico Lopez
     `tximport`](#import-kallisto-quantifications-using-tximport)
   - [Create `DESeqDataSet` objects and normalise
     counts](#create-deseqdataset-objects-and-normalise-counts)
+      - [*Apis mellifera*](#apis-mellifera)
+      - [*Bombus terrestris*](#bombus-terrestris)
+  - [Create bar chart with error
+    bars](#create-bar-chart-with-error-bars)
 
 # Load libraries
 
@@ -26,29 +30,26 @@ load_cran_pkgs <- function(pkg) {
   sapply(pkg, require, character.only = TRUE)
 }
 cran_pkgs <- c(
-  "BiocManager", "tidyverse", "ggsignif", "gghighlight", "GGally", "ggfortify",
-  "RColorBrewer", "pheatmap", "styler", "here"
+  "BiocManager", "tidyverse", "styler", "here"
 )
 load_cran_pkgs(cran_pkgs)
 ```
 
-    ##  BiocManager    tidyverse     ggsignif  gghighlight       GGally    ggfortify 
-    ##         TRUE         TRUE         TRUE         TRUE         TRUE         TRUE 
-    ## RColorBrewer     pheatmap       styler         here 
-    ##         TRUE         TRUE         TRUE         TRUE
+    ## BiocManager   tidyverse      styler        here 
+    ##        TRUE        TRUE        TRUE        TRUE
 
 ``` r
 load_bioconductor_pkgs <- function(pkg) {
   sapply(pkg, require, character.only = TRUE)
 }
 bioconductor_pkgs <- c(
-  "biomaRt", "rhdf5", "tximport", "DESeq2", "apeglm", "vsn", "hexbin"
+  "biomaRt", "rhdf5", "tximport", "DESeq2"
 )
 load_bioconductor_pkgs(bioconductor_pkgs)
 ```
 
-    ##  biomaRt    rhdf5 tximport   DESeq2   apeglm      vsn   hexbin 
-    ##     TRUE     TRUE     TRUE     TRUE     TRUE     TRUE     TRUE
+    ##  biomaRt    rhdf5 tximport   DESeq2 
+    ##     TRUE     TRUE     TRUE     TRUE
 
 # Set a custom ggplot theme
 
@@ -213,6 +214,46 @@ all(file.exists(christen_files))
 ## *Bombus terrestris* `kallisto` quantifications
 
 ``` r
+# Colgan et al. 2019
+# Set sample identifiers using the names of the kallisto output directories
+colgan_ids <- dir(here::here(
+  "2019-colgan_queen_worker_head",
+  "2020-07-14-kallisto"
+))
+
+# Read metadata table
+colgan_table <- read.csv(
+  here::here(
+    "2019-colgan_queen_worker_head",
+    "2019-colgan_queen_worker_head_metadata.csv"
+  ),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+
+# Check that sample names match
+all(colgan_ids %in% colgan_table$sample)
+```
+
+    ## [1] TRUE
+
+``` r
+colgan_files <- here::here(
+  "2019-colgan_queen_worker_head",
+  "2020-07-14-kallisto",
+  colgan_table$sample,
+  "abundance.h5"
+)
+
+names(colgan_files) <- colgan_table$sample
+
+# Check that all files exist
+all(file.exists(colgan_files))
+```
+
+    ## [1] TRUE
+
+``` r
 # Harrison et al. 2015
 # Set sample identifiers using the names of the kallisto output directories
 harrison_ids <- dir(here::here(
@@ -286,8 +327,6 @@ bter_tx2gene <- biomaRt::getBM(
   attributes = c("ensembl_transcript_id", "ensembl_gene_id"),
   mart = bter_mart
 )
-
-# biomaRt::listAttributes(metazoa_mart)
 ```
 
 # Combine input files and data tables
@@ -301,6 +340,9 @@ amel_table <- dplyr::bind_rows(
   dplyr::select(sample, caste, tissue, study, species)
 
 # Bombus terrestris
+bter_files <- c(colgan_files, harrison_files)
+bter_table <- dplyr::bind_rows(colgan_table, harrison_table) %>%
+  dplyr::select(sample, caste, tissue, study, species)
 ```
 
 # Import `kallisto` quantifications using `tximport`
@@ -314,7 +356,7 @@ amel_txi <- tximport::tximport(amel_files,
 )
 
 # Bombus terrestris
-bter_txi <- tximport::tximport(harrison_files,
+bter_txi <- tximport::tximport(bter_files,
   type = "kallisto",
   tx2gene = bter_tx2gene,
   txOut = FALSE
@@ -323,8 +365,9 @@ bter_txi <- tximport::tximport(harrison_files,
 
 # Create `DESeqDataSet` objects and normalise counts
 
+## *Apis mellifera*
+
 ``` r
-# Apis mellifera
 amel_dds <- DESeq2::DESeqDataSetFromTximport(amel_txi,
   colData = amel_table,
   design = ~tissue
@@ -422,31 +465,114 @@ amel_nachrs_mean <- amel_nachrs_counts %>%
     sd = sd(sum_count)
   )
 
-head(amel_nachrs_mean)
+# head(amel_nachrs_mean)
 ```
 
-    ## # A tibble: 6 x 5
-    ## # Groups:   study, tissue [6]
-    ##   study    tissue               caste  mean_sum     sd
-    ##   <chr>    <chr>                <chr>     <dbl>  <dbl>
-    ## 1 christen brain                worker    3859.  862. 
-    ## 2 jasper   antenna              worker    1244.   86.8
-    ## 3 jasper   brain                worker   14565. 2521. 
-    ## 4 jasper   hypopharyngeal_gland worker    1284.  167. 
-    ## 5 jasper   malpighian_tubule    worker    1335.  372. 
-    ## 6 jasper   mandibular_gland     worker    2002.  627.
+## *Bombus terrestris*
 
 ``` r
+bter_dds <- DESeq2::DESeqDataSetFromTximport(bter_txi,
+  colData = bter_table,
+  design = ~tissue
+)
+
+# Estimate the size factors
+bter_dds <- DESeq2::estimateSizeFactors(bter_dds)
+# Filtering
+keep <- rowSums(DESeq2::counts(bter_dds) >= 10) >= 3
+dds <- bter_dds[keep, ]
+bter_counts <- DESeq2::counts(bter_dds, normalized = TRUE)
+
+bter_nachrs <- c(
+  "LOC100643274", "LOC100643282", "LOC100645032", "LOC100646787",
+  "LOC100647301", "LOC100647350", "LOC100647624", "LOC100648987",
+  "LOC100649515", "LOC100649612", "LOC100649796"
+)
+
+# "LOC100645032" has low expression
+
+bter_nachrs_counts <- bter_counts %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column(var = "ens_gene") %>%
+  tidyr::gather(key = "sample", value = "norm_count", -ens_gene) %>%
+  dplyr::mutate_if(is.numeric, round, digits = 4) %>%
+  dplyr::filter(ens_gene %in% bter_nachrs) %>%
+  # dplyr::filter(ens_gene != "LOC100645032") %>%
+  dplyr::group_by(sample) %>%
+  dplyr::mutate(mean_count = mean(norm_count)) %>%
+  dplyr::mutate(subunit = case_when(
+    ens_gene == "LOC100647624" ~ "alpha1",
+    ens_gene == "LOC100647301" ~ "alpha2",
+    ens_gene == "LOC100647350" ~ "alpha3",
+    ens_gene == "LOC100648987" ~ "alpha4e5",
+    ens_gene == "LOC100649515" ~ "alpha5",
+    ens_gene == "LOC100643274" ~ "alpha6",
+    ens_gene == "LOC100649796" ~ "alpha7",
+    ens_gene == "LOC100643282" ~ "alpha8",
+    ens_gene == "LOC100649612" ~ "beta1",
+    ens_gene == "LOC100646787" ~ "beta2"
+  )) %>%
+  dplyr::mutate(study = case_when(
+    stringr::str_detect(
+      sample, paste(colgan_table$sample, collapse = "|")
+    ) ~ "colgan",
+    stringr::str_detect(
+      sample, paste(harrison_table$sample, collapse = "|")
+    ) ~ "harrison"
+  )) %>%
+  dplyr::mutate(tissue = case_when(
+    stringr::str_detect(
+      sample, paste(colgan_table$sample, collapse = "|")
+    ) ~ "head",
+    stringr::str_detect(
+      sample, paste(harrison_table$sample, collapse = "|")
+    ) ~ "whole_body"
+  )) %>%
+  dplyr::mutate(caste = case_when(
+    grepl("queen", sample) ~ "queen",
+    grepl("worker", sample) ~ "worker"
+  ))
+
+# For each study, calculate the mean of sum of counts per sample
+bter_nachrs_mean <- bter_nachrs_counts %>%
+  group_by(study, sample, tissue, caste) %>%
+  summarise(sum_count = sum(norm_count)) %>%
+  group_by(study, tissue, caste) %>%
+  summarise(
+    mean_sum = mean(sum_count),
+    sd = sd(sum_count)
+  )
+
+head(bter_nachrs_mean)
+```
+
+    ## # A tibble: 4 x 5
+    ## # Groups:   study, tissue [2]
+    ##   study    tissue     caste  mean_sum    sd
+    ##   <chr>    <chr>      <chr>     <dbl> <dbl>
+    ## 1 colgan   head       queen     1337.  51.2
+    ## 2 colgan   head       worker    1740. 153. 
+    ## 3 harrison whole_body queen     1626. 275. 
+    ## 4 harrison whole_body worker    1486. 405.
+
+# Create bar chart with error bars
+
+``` r
+amel_nachrs_mean$species <- "amel"
+bter_nachrs_mean$species <- "bter"
+
+nachrs_mean <- dplyr::bind_rows(amel_nachrs_mean, bter_nachrs_mean)
+
 # Error bar plot using the mean of sum of normalised counts per sample
-ggplot(amel_nachrs_mean, aes(
-  x = tissue, y = mean_sum, color = tissue, fill = tissue
+ggplot(nachrs_mean, aes(
+  x = tissue, y = mean_sum
 )) +
   geom_bar(
     stat = "identity", position = position_dodge(),
-    width = 0.4, alpha = 0.9
+    width = 0.4, alpha = 0.9, color = "#FFA600", fill = "#FFA600"
   ) +
   geom_errorbar(aes(ymin = mean_sum - sd, ymax = mean_sum + sd),
-    color = "#9E9E9E", width = 0.2, size = 0.6
+    color = "#858585", width = 0.2, size = 0.6
   ) +
   theme(
     plot.title = element_text(hjust = 0.5, size = 12, face = "plain"),
@@ -455,16 +581,15 @@ ggplot(amel_nachrs_mean, aes(
     legend.position = "none",
     axis.title = element_text(size = 12),
     axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
-    panel.spacing.x = unit(1, "mm")
+    panel.spacing.x = unit(2, "mm")
   ) +
-  facet_grid(. ~ study + caste, scales = "free", space = "free") +
+  facet_grid(. ~ species + study + caste, scales = "free", space = "free") +
   labs(
     x = "Tissue per caste per study",
-    y = "Mean of sum of normalised nAChR counts"
+    y = "Mean expression of nAChR gene family"
+    # y = "Mean of sum of the normalised nAChR counts"
   )
 ```
-
-<img src="amel_bter_mean_expression_files/figure-gfm/unnamed-chunk-9-1.png" width=" extwidth" height="  extheight" />
 
 ``` r
 ggsave(
@@ -472,8 +597,8 @@ ggsave(
     "results", "amel_bter",
     "amel_bter_mean_norm_counts_bar_chart.pdf"
   ),
-  width = 8,
-  height = 5,
+  width = 12,
+  height = 6,
   units = "in"
 )
 ```
