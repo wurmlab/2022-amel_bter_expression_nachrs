@@ -1,0 +1,16 @@
+﻿sample,caste,tissue,stage,study,status,condition,species
+ERR883767_queen_adult,queen,whole_body,adult,harrison,reproductive,queen_adult,bter
+ERR883768_queen_adult,queen,whole_body,adult,harrison,reproductive,queen_adult,bter
+ERR883769_queen_adult,queen,whole_body,adult,harrison,reproductive,queen_adult,bter
+ERR883782_worker_adult_repr,worker,whole_body,adult,harrison,reproductive,worker_adult_repr,bter
+ERR883783_worker_adult_repr,worker,whole_body,adult,harrison,reproductive,worker_adult_repr,bter
+ERR883784_worker_adult_repr,worker,whole_body,adult,harrison,reproductive,worker_adult_repr,bter
+ERR883785_worker_adult_undet,worker,whole_body,adult,harrison,sterile,worker_adult_undet,bter
+ERR883786_worker_adult_undet,worker,whole_body,adult,harrison,sterile,worker_adult_undet,bter
+ERR883787_worker_adult_undet,worker,whole_body,adult,harrison,sterile,worker_adult_undet,bter
+ERR883788_worker_larva,worker,whole_body,larva,harrison,NA,worker_larva,bter
+ERR883789_worker_larva,worker,whole_body,larva,harrison,NA,worker_larva,bter
+ERR883790_worker_larva,worker,whole_body,larva,harrison,NA,worker_larva,bter
+ERR883791_worker_pupa,worker,whole_body,pupa,harrison,NA,worker_pupa,bter
+ERR883792_worker_pupa,worker,whole_body,pupa,harrison,NA,worker_pupa,bter
+ERR883793_worker_pupa,worker,whole_body,pupa,harrison,NA,worker_pupa,bter
