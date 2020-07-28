@@ -1,0 +1,9 @@
+sample,caste,tissue,colony,block,room,type,study,species
+C06_worker_head,worker,head,C06,one,A,control,colgan,bter
+C34_worker_head,worker,head,C34,one,B,control,colgan,bter
+C48_worker_head,worker,head,C48,two,A,control,colgan,bter
+C61_worker_head,worker,head,C61,two,B,control,colgan,bter
+C06_queen_head,queen,head,C06,one,A,control,colgan,bter
+C34_queen_head,queen,head,C34,one,B,control,colgan,bter
+C48_queen_head,queen,head,C48,two,A,control,colgan,bter
+C61_queen_head,queen,head,C61,two,B,control,colgan,bter
