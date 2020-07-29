@@ -27,6 +27,10 @@ knitr::opts_chunk$set(
 )
 ```
 
+```{cat, engine.opts = list(file = "header.tex")}
+\renewcommand{\linethickness}{0.05em}
+```
+
 # Load libraries
 ```{r}
 load_cran_pkgs <- function(pkg) {
@@ -451,7 +455,7 @@ bter_nachrs_counts <- bter_counts %>%
   tidyr::gather(key = "sample", value = "norm_count", -ens_gene) %>%
   dplyr::mutate_if(is.numeric, round, digits = 4) %>%
   dplyr::filter(ens_gene %in% bter_nachrs) %>%
-  # dplyr::filter(ens_gene != "LOC100645032") %>%
+  dplyr::filter(ens_gene != "LOC100645032") %>%
   dplyr::group_by(sample) %>%
   dplyr::mutate(mean_count = mean(norm_count)) %>%
   dplyr::mutate(subunit = case_when(
@@ -478,9 +482,11 @@ bter_nachrs_counts <- bter_counts %>%
     stringr::str_detect(
       sample, paste(colgan_table$sample, collapse = "|")
     ) ~ "head",
-    stringr::str_detect(
-      sample, paste(harrison_table$sample, collapse = "|")
-    ) ~ "whole_body"
+    grepl("queen_adult", sample) ~ "whole_body_queen_adult",
+    grepl("worker_adult_repr", sample) ~ "whole_body_worker_adult_repr",
+    grepl("worker_adult_undet", sample) ~ "whole_body_worker_adult_undet",
+    grepl("worker_larva", sample) ~ "whole_body_worker_larva",
+    grepl("worker_pupa", sample) ~ "whole_body_worker_pupa"
   )) %>%
   dplyr::mutate(caste = case_when(
     grepl("queen", sample) ~ "queen",
