@@ -1,3 +1,8 @@
+renv::init(
+  project = "~/2020-amel_bter_expression_nachrs",
+  bare = TRUE, restart = FALSE
+)
+
 load_cran_pkgs <- function(pkg) {
   new_pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
   if (length(new_pkg)) {
@@ -7,8 +12,8 @@ load_cran_pkgs <- function(pkg) {
 }
 
 cran_pkgs <- c(
-  "BiocManager", "tidyverse", "ggsignif", "gghighlight", "GGally", "ggfortify", 
-  "RColorBrewer", "pheatmap", "styler", "renv"
+  "BiocManager", "tidyverse",  "RColorBrewer", "pheatmap", "styler", 
+  "renv", "here"
 )
 load_cran_pkgs(cran_pkgs)
 
@@ -21,10 +26,9 @@ load_bioconductor_pkgs <- function(pkg) {
 }
 
 bioconductor_pkgs <- c(
-  "biomaRt", "rhdf5", "tximport", "DESeq2", "apeglm", "sva", "limma", "vsn",
-  "hexbin"
+  "biomaRt", "rhdf5", "tximport", "DESeq2", "apeglm", "RUVSeq", "limma", 
+  "edgeR", "csaw", "vsn", "hexbin"
 )
 load_bioconductor_pkgs(bioconductor_pkgs)
 
-renv::init(bare = TRUE, restart = FALSE)
 renv::snapshot()
