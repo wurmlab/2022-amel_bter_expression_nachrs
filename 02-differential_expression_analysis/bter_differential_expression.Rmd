@@ -1,0 +1,439 @@
+---
+title: "Differential expression of nAChR subunits in _Bombus terrestris_"
+author: "Federico Lopez"
+date: '`r Sys.Date()`'
+output:
+  github_document:
+    toc: yes
+  pdf_document: 
+    fig_caption: yes
+    toc: yes
+  html_document:
+    toc: yes
+editor_options: 
+  chunk_output_type: console
+geometry: margin = 1cm
+---
+
+```{r setup, echo = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  cache.lazy = FALSE,
+  include = FALSE,
+  out.height = "\textheight",
+  out.width = "\textwidth"
+)
+```
+
+# Load libraries
+```{r}
+load_cran_pkgs <- function(pkg) {
+  sapply(pkg, require, character.only = TRUE)
+}
+cran_pkgs <- c(
+  "BiocManager", "tidyverse", "RColorBrewer", "pheatmap", "styler", "here"
+)
+load_cran_pkgs(cran_pkgs)
+
+load_bioconductor_pkgs <- function(pkg) {
+  sapply(pkg, require, character.only = TRUE)
+}
+bioconductor_pkgs <- c(
+  "biomaRt", "rhdf5", "tximport", "DESeq2", "edgeR", "csaw", "apeglm",
+  "vsn", "hexbin"
+)
+load_bioconductor_pkgs(bioconductor_pkgs)
+```
+
+# Set a custom ggplot theme
+```{r}
+# Set a custom ggplot theme
+# devtools::install_github("cttobin/ggthemr")
+library(ggthemr)
+# Diverging
+custom_palette <- c(
+  "#9E9E9E", "#59BDEF", "#EBCC2A", "#E1AF00", "#F27C8D", "#7B73D1", "#7B9FE0",
+  "#F5CC7F", "#66C2A5", "#28A7B6", "#F2CB57", "#F2A057", "#F2845C"
+)
+# ggthemr::colour_plot(custom_palette)
+
+custom_theme <- ggthemr::define_palette(
+  swatch = custom_palette,
+  gradient = c(lower = "#59BDEF", upper = "#FF6B5A")
+)
+ggthemr::ggthemr(custom_theme)
+```
+
+# Associate transcripts to genes
+```{r}
+# Remove all biomaRt cached files
+# biomaRt::biomartCacheInfo()
+# biomaRt::biomartCacheClear()
+
+# Retrieve Ensembl gene identifiers/names and create transcript-to-gene table
+biomaRt::listMarts(host = "metazoa.ensembl.org")
+
+metazoa_mart <- biomaRt::useMart(
+  biomart = "metazoa_mart",
+  dataset = "bterrestris_eg_gene",
+  host = "metazoa.ensembl.org" # version 47
+)
+
+transcript_to_gene <- biomaRt::getBM(
+  attributes = c("ensembl_transcript_id", "ensembl_gene_id"),
+  mart = metazoa_mart
+)
+```
+
+# Create vector of nAChR gene identifiers
+```{r}
+nachrs <- c(
+  "LOC100643274", "LOC100643282", "LOC100645032", "LOC100646787",
+  "LOC100647301", "LOC100647350", "LOC100647624", "LOC100648987",
+  "LOC100649515", "LOC100649612", "LOC100649796"
+)
+```
+
+# Analysis of Colgan et al. (2019) data
+## Read `kallisto` results and table of samples and covariates.
+```{r}
+# here::here()
+# Create directory for results
+dir.create(here::here(
+  "results", "2019-colgan_queen_worker_head", "2020-07-28-gene_expression"
+), recursive = TRUE)
+
+# Set sample identifiers using the names of the kallisto output directories
+sample_ids <- dir(here::here(
+  "2019-colgan_queen_worker_head", "2020-07-14-kallisto"
+))
+
+# Read metadata table
+samples_table <- read.csv(
+  here::here(
+    "2019-colgan_queen_worker_head",
+    "2019-colgan_queen_worker_head_metadata.csv"
+  ),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+
+colnames(samples_table)
+
+samples_table$caste <- relevel(
+  samples_table$caste,
+  ref = "worker"
+)
+
+input_files <- here::here(
+  "2019-colgan_queen_worker_head/2020-07-14-kallisto",
+  samples_table$sample,
+  "abundance.h5"
+)
+
+names(input_files) <- samples_table$sample
+input_files
+
+# Check that sample names match
+all(sample_ids %in% samples_table$sample)
+
+# Check that all files exist
+all(file.exists(input_files))
+# input_files
+```
+
+## Create a `DESeqDataSet` object
+```{r}
+# Import kallisto quantifications
+txi <- tximport::tximport(input_files,
+  type = "kallisto",
+  tx2gene = transcript_to_gene,
+  txOut = FALSE
+)
+
+# Create a DESeqDataSet object
+# The design below includes the batch factors "block" and "room"
+dds <- DESeq2::DESeqDataSetFromTximport(txi,
+  colData = samples_table,
+  design = ~ block + room + caste
+)
+```
+
+## Pre-filtering of low-count genes
+```{r}
+# Show table of sample information
+SummarizedExperiment::colData(dds)
+
+# Show number of replicates per condition
+with(SummarizedExperiment::colData(dds), table(caste))
+
+# Estimate the size factors
+dds <- DESeq2::estimateSizeFactors(dds)
+
+# Choose the reference level
+dds$caste <- relevel(dds$caste, ref = "worker")
+
+# Pre-filter the dataset
+nrow(dds)
+# 10661
+# At least 4 samples with a count of 10 or higher
+# The number of samples would be set to the smallest group size
+keep <- rowSums(DESeq2::counts(dds) >= 10) >= 4
+dds <- dds[keep, ]
+nrow(dds)
+# 9139
+```
+
+## Differential gene expression analysis
+```{r}
+# Run DESeq2 pipeline
+dds <- DESeq2::DESeq(dds, test = "Wald", betaPrior = FALSE)
+DESeq2::resultsNames(dds)
+
+# Extract results
+res <- DESeq2::results(
+  dds,
+  contrast = c("caste", "queen", "worker"),
+  lfcThreshold = 0,
+  alpha = 0.1,
+  pAdjustMethod = "BH"
+)
+
+DESeq2::summary(res)
+```
+
+## Create table of `DESeq2` Wald test results
+```{r}
+res_colgan <- res %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column(var = "ens_gene") %>%
+  dplyr::filter(ens_gene %in% nachrs) %>%
+  dplyr::mutate(subunit = case_when(
+    ens_gene == "LOC100647624" ~ "alpha1",
+    ens_gene == "LOC100647301" ~ "alpha2",
+    ens_gene == "LOC100647350" ~ "alpha3",
+    ens_gene == "LOC100645032" ~ "alpha4",
+    ens_gene == "LOC100648987" ~ "alpha4e5",
+    ens_gene == "LOC100649515" ~ "alpha5",
+    ens_gene == "LOC100643274" ~ "alpha6",
+    ens_gene == "LOC100649796" ~ "alpha7",
+    ens_gene == "LOC100643282" ~ "alpha8",
+    ens_gene == "LOC100649612" ~ "beta1",
+    ens_gene == "LOC100646787" ~ "beta2"
+  )) %>%
+  dplyr::mutate(regulation = ifelse(log2FoldChange > 0, "up", "down")) %>%
+  dplyr::mutate(significance = ifelse(padj < 0.05, "sig", "notsig")) %>%
+  dplyr::mutate(contrast = "queen_vs_worker") %>%
+  dplyr::mutate(study = "colgan") %>%
+  dplyr::mutate(species = "bter") %>%
+  dplyr::mutate_if(is.numeric, round, digits = 4)
+
+write.csv(res_colgan,
+  file = here::here(
+    "results", "2019-colgan_queen_worker_head",
+    "2020-07-28-gene_expression", "bter_colgan_deseq2_wald_res_nachrs.csv"
+  ),
+  row.names = FALSE
+)
+```
+
+# Analysis of Harrison et al. (2015) data
+## Read `kallisto` results and table of samples and covariates.
+```{r}
+# Create directory for results
+dir.create(here::here(
+  "results", "2015-harrison_queen_worker_whole_body",
+  "2020-07-28-gene_expression"
+), recursive = TRUE)
+
+# Set sample identifiers using the names of the kallisto output directories
+sample_ids <- dir(here::here(
+  "2015-harrison_queen_worker_whole_body",
+  "2020-07-14-kallisto"
+))
+
+# Read metadata table
+samples_table <- read.csv(
+  here::here(
+    "2015-harrison_queen_worker_whole_body",
+    "2015-harrison_queen_worker_whole_body_metadata.csv"
+  ),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+
+colnames(samples_table)
+
+samples_table$condition <- relevel(
+  samples_table$condition,
+  ref = "worker_larva"
+)
+
+input_files <- here::here(
+  "2015-harrison_queen_worker_whole_body",
+  "2020-07-14-kallisto",
+  samples_table$sample,
+  "abundance.h5"
+)
+
+names(input_files) <- samples_table$sample
+input_files
+
+# Check that sample names match
+all(sample_ids %in% samples_table$sample)
+
+# Check that all files exist
+all(file.exists(input_files))
+# input_files
+```
+
+## Create a `DESeqDataSet` object
+```{r}
+# Import kallisto quantifications
+txi <- tximport::tximport(input_files,
+  type = "kallisto",
+  tx2gene = transcript_to_gene,
+  txOut = FALSE
+)
+
+# Create a DESeqDataSet object
+dds <- DESeq2::DESeqDataSetFromTximport(txi,
+  colData = samples_table,
+  design = ~condition
+)
+```
+
+## Pre-filtering of low-count genes
+```{r}
+# Show table of sample information
+colData(dds)
+
+# Show number of replicates per condition
+with(colData(dds), table(caste))
+
+# Estimate the size factors
+dds <- DESeq2::estimateSizeFactors(dds)
+
+# Choose the reference level
+dds$condition <- relevel(dds$condition, ref = "worker_larva")
+
+# Pre-filter the dataset
+nrow(dds)
+# 10661
+# At least 3 samples with a count of 10 or higher
+# The number of samples would be set to the smallest group size
+keep <- rowSums(DESeq2::counts(dds) >= 10) >= 3
+dds <- dds[keep, ]
+nrow(dds)
+# 9892
+```
+
+## Differential gene expression analysis
+```{r}
+# Run DESeq2 pipeline
+dds <- DESeq2::DESeq(dds, test = "Wald", betaPrior = FALSE)
+DESeq2::resultsNames(dds)
+
+conditions <- samples_table %>%
+  dplyr::pull(condition) %>%
+  unique() %>%
+  as.character()
+
+# Create list of condition pairs
+contrasts <- combn(x = conditions, m = 2) %>%
+  t() %>%
+  as.data.frame.array() %>%
+  dplyr::rename(cond1 = V1, cond2 = V2) %>%
+  dplyr::mutate(contrast = paste0(cond1, "_vs_", cond2))
+contrasts
+
+res_contrasts <- list()
+for (row in 1:nrow(contrasts)) {
+  cond1 <- as.character(contrasts[row, "cond1"])
+  cond2 <- as.character(contrasts[row, "cond2"])
+  res_contrasts[[row]] <- DESeq2::results(
+    dds,
+    contrast = c("condition", cond1, cond2),
+    lfcThreshold = 0,
+    alpha = 0.1,
+    pAdjustMethod = "BH"
+  )
+}
+
+names(res_contrasts) <- contrasts$contrast
+
+res_nachrs <- list()
+for (contrast in contrasts$contrast) {
+  res_nachrs[[contrast]] <- res_contrasts[[contrast]] %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column(var = "ens_gene") %>%
+    dplyr::filter(ens_gene %in% nachrs) %>%
+    dplyr::mutate(subunit = case_when(
+      ens_gene == "LOC100647624" ~ "alpha1",
+      ens_gene == "LOC100647301" ~ "alpha2",
+      ens_gene == "LOC100647350" ~ "alpha3",
+      ens_gene == "LOC100645032" ~ "alpha4",
+      ens_gene == "LOC100648987" ~ "alpha4e5",
+      ens_gene == "LOC100649515" ~ "alpha5",
+      ens_gene == "LOC100643274" ~ "alpha6",
+      ens_gene == "LOC100649796" ~ "alpha7",
+      ens_gene == "LOC100643282" ~ "alpha8",
+      ens_gene == "LOC100649612" ~ "beta1",
+      ens_gene == "LOC100646787" ~ "beta2"
+    )) %>%
+    dplyr::mutate(regulation = ifelse(log2FoldChange > 0, "up", "down")) %>%
+    dplyr::mutate(significance = ifelse(padj < 0.05, "sig", "notsig")) %>%
+    dplyr::mutate(contrast = contrast) %>%
+    dplyr::mutate(study = "harrison") %>%
+    dplyr::mutate(species = "bter") %>%
+    dplyr::mutate_if(is.numeric, round, digits = 4)
+}
+
+res_harrison <- dplyr::bind_rows(res_nachrs)
+
+# Write table of `DESeq2` Wald test results
+write.csv(res_harrison,
+  file = here::here(
+    "results", "2015-harrison_queen_worker_whole_body",
+    "2020-07-28-gene_expression", "bter_harrison_deseq2_wald_res_nachrs.csv"
+  ),
+  row.names = FALSE
+)
+
+table(res_harrison$significance)
+# not_sig     sig
+#     60      30
+
+table(res_harrison$subunit, res_harrison$significance)
+#          notsig sig
+# alpha1        7   3
+# alpha2        5   5
+# alpha3        8   2
+# alpha4e5      5   5
+# alpha5        7   3
+# alpha6        6   3
+# alpha7        8   2
+# alpha8       10   0
+# beta1         7   3
+# beta2         6   4
+```
+
+# Combine results into a single data frame
+```{r}
+# Create directory for results
+dir.create(here::here(
+  "results", "2020-07-28-gene_expression"
+), recursive = TRUE)
+
+bter_res_nachrs <- dplyr::bind_rows(res_colgan, res_harrison)
+
+write.csv(bter_res_nachrs,
+  file = here::here(
+    "results", "2020-07-28-gene_expression", 
+    "bter_deseq2_wald_res_nachrs.csv"
+  ),
+  row.names = FALSE
+)
+```
