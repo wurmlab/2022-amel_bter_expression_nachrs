@@ -1,0 +1,553 @@
+---
+title: "Quality assessment of _Bombus terrestris_ data sets"
+author: "Federico Lopez"
+date: '`r Sys.Date()`'
+output:
+  github_document:
+    toc: yes
+  pdf_document: 
+    fig_caption: yes
+    toc: yes
+  html_document:
+    toc: yes
+editor_options: 
+  chunk_output_type: console
+geometry: margin = 1cm
+---
+
+```{r setup, echo = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  cache.lazy = FALSE,
+  include = FALSE,
+  out.height = "\textheight",
+  out.width = "\textwidth"
+)
+```
+
+# Load libraries
+```{r}
+load_cran_pkgs <- function(pkg) {
+  sapply(pkg, require, character.only = TRUE)
+}
+cran_pkgs <- c(
+  "BiocManager", "tidyverse", "RColorBrewer", "pheatmap", "styler", "here"
+)
+load_cran_pkgs(cran_pkgs)
+
+load_bioconductor_pkgs <- function(pkg) {
+  sapply(pkg, require, character.only = TRUE)
+}
+bioconductor_pkgs <- c(
+  "biomaRt", "rhdf5", "tximport", "DESeq2", "edgeR", "csaw", "apeglm",
+  "vsn", "hexbin"
+)
+load_bioconductor_pkgs(bioconductor_pkgs)
+```
+
+# Set a custom ggplot theme
+```{r}
+# Set a custom ggplot theme
+# devtools::install_github("cttobin/ggthemr")
+library(ggthemr)
+# Diverging
+custom_palette <- c(
+  "#9E9E9E", "#59BDEF", "#EBCC2A", "#E1AF00", "#F27C8D", "#7B73D1", "#7B9FE0",
+  "#F5CC7F", "#66C2A5", "#28A7B6", "#F2CB57", "#F2A057", "#F2845C"
+)
+# ggthemr::colour_plot(custom_palette)
+
+custom_theme <- ggthemr::define_palette(
+  swatch = custom_palette,
+  gradient = c(lower = "#59BDEF", upper = "#FF6B5A")
+)
+ggthemr::ggthemr(custom_theme)
+```
+
+# Associate transcripts to genes
+```{r}
+# Remove all biomaRt cached files
+# biomaRt::biomartCacheInfo()
+# biomaRt::biomartCacheClear()
+
+# Retrieve Ensembl gene identifiers/names and create transcript-to-gene table
+biomaRt::listMarts(host = "metazoa.ensembl.org")
+
+metazoa_mart <- biomaRt::useMart(
+  biomart = "metazoa_mart",
+  dataset = "bterrestris_eg_gene",
+  host = "metazoa.ensembl.org" # version 47
+)
+
+transcript_to_gene <- biomaRt::getBM(
+  attributes = c("ensembl_transcript_id", "ensembl_gene_id"),
+  mart = metazoa_mart
+)
+```
+
+# Create vector of nAChR gene identifiers
+```{r}
+nachrs <- c(
+  "LOC100643274", "LOC100643282", "LOC100645032", "LOC100646787",
+  "LOC100647301", "LOC100647350", "LOC100647624", "LOC100648987",
+  "LOC100649515", "LOC100649612", "LOC100649796"
+)
+```
+
+# Analysis of Colgan et al. (2019) data
+## Read `kallisto` results and table of samples and covariates
+```{r}
+# here::here()
+# Create directory for results
+dir.create(here::here(
+  "results", "2019-colgan_queen_worker_head", "2020-07-28-quality_assessment"
+), recursive = TRUE)
+
+# Set sample identifiers using the names of the kallisto output directories
+sample_ids <- dir(here::here(
+  "2019-colgan_queen_worker_head", "2020-07-14-kallisto"
+))
+
+# Read metadata table
+samples_table <- read.csv(
+  here::here(
+    "2019-colgan_queen_worker_head",
+    "2019-colgan_queen_worker_head_metadata.csv"
+  ),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+
+colnames(samples_table)
+
+samples_table$caste <- relevel(
+  samples_table$caste,
+  ref = "worker"
+)
+
+input_files <- here::here(
+  "2019-colgan_queen_worker_head/2020-07-14-kallisto",
+  samples_table$sample,
+  "abundance.h5"
+)
+
+names(input_files) <- samples_table$sample
+
+# Check that sample names match
+all(sample_ids %in% samples_table$sample)
+
+# Check that all files exist
+all(file.exists(input_files))
+```
+
+## Create a `DESeqDataSet` object
+```{r}
+# Import kallisto quantifications
+txi <- tximport::tximport(input_files,
+  type = "kallisto",
+  tx2gene = transcript_to_gene,
+  txOut = FALSE
+)
+
+# Create a DESeqDataSet object
+# The design below includes the batch factors "block" and "room"
+dds <- DESeq2::DESeqDataSetFromTximport(txi,
+  colData = samples_table,
+  design = ~ block + room + caste
+)
+```
+
+## Pre-filtering of low-count genes
+```{r}
+# Show table of sample information
+SummarizedExperiment::colData(dds)
+
+# Show number of replicates per condition
+with(SummarizedExperiment::colData(dds), table(caste))
+
+# Estimate the size factors
+dds <- DESeq2::estimateSizeFactors(dds)
+
+# Choose the reference level
+dds$caste <- relevel(dds$caste, ref = "worker")
+
+# Pre-filter the dataset
+nrow(dds)
+# 10661
+# At least 4 samples with a count of 10 or higher
+# The number of samples would be set to the smallest group size
+keep <- rowSums(DESeq2::counts(dds) >= 10) >= 4
+dds <- dds[keep, ]
+nrow(dds)
+# 9139
+```
+
+## Data transformation and quality assessment
+Transform count data using `DESeq2`'s `vst` function. The variance stabilizing 
+transformation (`vst`) is used for visualization, clustering or other machine 
+learning tasks.
+```{r}
+# Variance stabilizing transformation
+vsd <- DESeq2::vst(dds, blind = FALSE)
+
+# Effect of transformation on the variance
+vsn::meanSdPlot(assay(vsd))
+
+ggsave(
+  filename = here::here(
+    "results", "2019-colgan_queen_worker_head",
+    "2020-07-28-quality_assessment", "bter_colgan_vst_meanSdPlot.pdf"
+  ),
+  width = 5,
+  height = 4,
+  units = "in"
+)
+```
+
+## Remove batch effects using `limma`'s `removeBatchEffect()` function
+```{r}
+# Removes any shifts in the log2-scale expression data that can be
+# explained by batch
+# Here "design" relates to "treatment conditions to be preserved, usually the
+# design matrix with all experimental factors other than the batch effects."
+mod <- model.matrix(~ 0 + caste, data = samples_table)
+mat <- assay(vsd)
+mat <- limma::removeBatchEffect(mat,
+  batch = vsd$block,
+  batch2 = vsd$room,
+  design = mod
+)
+assay(vsd) <- mat
+```
+
+## Plot the (VST) transformed counts with batch variation removed
+```{r}
+# Create a tidy data frame with the transformed counts
+vst_nachrs <- assay(vsd) %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column(var = "ens_gene") %>%
+  tidyr::gather(key = "sample", value = "vst_count", -ens_gene) %>%
+  dplyr::filter(ens_gene %in% nachrs) %>%
+  dplyr::filter(ens_gene != "LOC100645032") %>%
+  dplyr::mutate(subunit = case_when(
+    ens_gene == "LOC100647624" ~ "alpha1",
+    ens_gene == "LOC100647301" ~ "alpha2",
+    ens_gene == "LOC100647350" ~ "alpha3",
+    ens_gene == "LOC100648987" ~ "alpha4e5",
+    ens_gene == "LOC100649515" ~ "alpha5",
+    ens_gene == "LOC100643274" ~ "alpha6",
+    ens_gene == "LOC100649796" ~ "alpha7",
+    ens_gene == "LOC100643282" ~ "alpha8",
+    ens_gene == "LOC100649612" ~ "beta1",
+    ens_gene == "LOC100646787" ~ "beta2"
+  )) %>%
+  dplyr::mutate(caste = case_when(
+    grepl("worker", sample) ~ "worker",
+    grepl("queen", sample) ~ "queen"
+  )) %>%
+  dplyr::mutate_if(is.numeric, round, digits = 4)
+
+ggplot(vst_nachrs, aes(
+  x = caste, y = vst_count, color = caste, fill = caste
+)) +
+  geom_boxplot(
+    alpha = 0.6,
+    width = 0.4,
+    position = position_dodge(0.8),
+    size = 0.6
+  ) +
+  geom_jitter(
+    shape = 21,
+    fill = "white",
+    size = 1.6,
+    stroke = 0.8,
+    position = position_dodge(0.8)
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 12, face = "plain"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12, face = "plain"),
+    strip.text = element_text(size = 10, face = "plain", hjust = 0.5),
+    legend.title = element_blank(),
+    legend.text = element_text(size = 10),
+    legend.position = "bottom",
+    axis.title = element_text(size = 10),
+    axis.text.x = element_blank(),
+    panel.spacing.x = unit(1, "mm")
+  ) +
+  labs(
+    x = "Caste",
+    y = expression(paste("Log"[2], " (VST) transformed count")) # batch variation removed
+  ) +
+  facet_wrap(~subunit, ncol = 10)
+
+ggsave(
+  filename = here::here(
+    "results", "2019-colgan_queen_worker_head",
+    "2020-07-28-quality_assessment", "bter_colgan_vst_nachrs_boxplots.pdf"
+  ),
+  width = 8,
+  height = 5,
+  units = "in"
+)
+```
+
+## Principal component plot of the samples
+```{r}
+pca_data <- DESeq2::plotPCA(vsd,
+  intgroup = "caste",
+  n = 500,
+  returnData = TRUE
+)
+
+# Customize PCA plot
+percent_var <- round(100 * attr(pca_data, "percentVar"))
+
+caste_breaks <- c("queen", "worker")
+caste_colors <- c("#59BDEF", "#EBCC2A")
+
+ggplot(pca_data, aes(x = PC1, y = PC2, color = caste)) +
+  geom_point(size = 4) +
+  xlab(paste0("PC1 [", percent_var[1], "%]")) +
+  ylab(paste0("PC2 [", percent_var[2], "%]")) +
+  coord_fixed(ratio = 1) +
+  theme(
+    legend.title = element_blank(),
+    legend.text = element_text(size = 10),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  ) +
+  scale_fill_manual(breaks = caste_breaks, values = caste_colors) +
+  scale_color_manual(breaks = caste_breaks, values = caste_colors)
+
+ggsave(
+  filename = here::here(
+    "results", "2019-colgan_queen_worker_head",
+    "2020-07-28-quality_assessment", "bter_colgan_vst_pca.pdf"
+  ),
+  width = 5,
+  height = 5,
+  units = "in"
+)
+```
+
+# Analysis of the Harrison et al. (2015) data
+## Read `kallisto` results and table of samples and covariates
+```{r}
+# Create directory for results
+dir.create(here::here(
+  "results", "2015-harrison_queen_worker_whole_body",
+  "2020-07-28-quality_assessment"
+), recursive = TRUE)
+
+# Set sample identifiers using the names of the kallisto output directories
+sample_ids <- dir(here(
+  "2015-harrison_queen_worker_whole_body",
+  "2020-07-14-kallisto"
+))
+
+# Read metadata table
+samples_table <- read.csv(
+  here(
+    "2015-harrison_queen_worker_whole_body",
+    "2015-harrison_queen_worker_whole_body_metadata.csv"
+  ),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+
+colnames(samples_table)
+
+samples_table$condition <- relevel(
+  samples_table$condition,
+  ref = "worker_larva"
+)
+
+input_files <- here(
+  "2015-harrison_queen_worker_whole_body",
+  "2020-07-14-kallisto",
+  samples_table$sample,
+  "abundance.h5"
+)
+
+names(input_files) <- samples_table$sample
+
+# Check that sample names match
+all(sample_ids %in% samples_table$sample)
+
+# Check that all files exist
+all(file.exists(input_files))
+```
+
+## Create a `DESeqDataSet` object
+```{r}
+# Import kallisto quantifications
+txi <- tximport::tximport(input_files,
+  type = "kallisto",
+  tx2gene = transcript_to_gene,
+  txOut = FALSE
+)
+
+# Create a DESeqDataSet object
+dds <- DESeq2::DESeqDataSetFromTximport(txi,
+  colData = samples_table,
+  design = ~condition
+)
+```
+
+## Pre-filtering of low-count genes
+```{r}
+# Show table of sample information
+colData(dds)
+
+# Show number of replicates per condition
+with(colData(dds), table(caste))
+
+# Estimate the size factors
+dds <- DESeq2::estimateSizeFactors(dds)
+
+# Choose the reference level
+dds$condition <- relevel(dds$condition, ref = "worker_larva")
+
+# Pre-filter the dataset
+nrow(dds)
+# 10661
+# At least 3 samples with a count of 10 or higher
+# The number of samples would be set to the smallest group size
+keep <- rowSums(DESeq2::counts(dds) >= 10) >= 3
+dds <- dds[keep, ]
+nrow(dds)
+# 9892
+```
+
+## Data transformation and quality assessment
+Transform count data using `DESeq2`'s `vst` function. The variance stabilizing 
+transformation (`vst`) is used for visualization, clustering or other machine 
+learning tasks.
+```{r}
+# Variance stabilizing transformation
+vsd <- DESeq2::vst(dds, blind = FALSE)
+
+# Effect of transformation on the variance
+vsn::meanSdPlot(assay(vsd))
+
+ggsave(
+  filename = here(
+    "results", "2015-harrison_queen_worker_whole_body",
+    "2020-07-28-quality_assessment",
+    "bter_harrison_vst_meanSdPlot.pdf"
+  ),
+  width = 5,
+  height = 4,
+  units = "in"
+)
+```
+
+## Plot the (VST) transformed counts
+```{r}
+# Create a tidy data frame with the transformed counts
+vst_nachrs <- assay(vsd) %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column(var = "ens_gene") %>%
+  tidyr::gather(key = "sample", value = "vst_count", -ens_gene) %>%
+  dplyr::filter(ens_gene %in% nachrs) %>%
+  dplyr::filter(ens_gene != "LOC100645032") %>%
+  dplyr::mutate(subunit = case_when(
+    ens_gene == "LOC100647624" ~ "alpha1",
+    ens_gene == "LOC100647301" ~ "alpha2",
+    ens_gene == "LOC100647350" ~ "alpha3",
+    ens_gene == "LOC100648987" ~ "alpha4e5",
+    ens_gene == "LOC100649515" ~ "alpha5",
+    ens_gene == "LOC100643274" ~ "alpha6",
+    ens_gene == "LOC100649796" ~ "alpha7",
+    ens_gene == "LOC100643282" ~ "alpha8",
+    ens_gene == "LOC100649612" ~ "beta1",
+    ens_gene == "LOC100646787" ~ "beta2"
+  )) %>%
+  dplyr::mutate(condition = case_when(
+    grepl("queen_adult", sample) ~ "queen_adult",
+    grepl("worker_adult_repr", sample) ~ "worker_adult_repr",
+    grepl("worker_adult_undet", sample) ~ "worker_adult_undet",
+    grepl("worker_larva", sample) ~ "worker_larva",
+    grepl("worker_pupa", sample) ~ "worker_pupa"
+  )) %>%
+  dplyr::mutate_if(is.numeric, round, digits = 4)
+
+ggplot(vst_nachrs, aes(
+  x = condition, y = vst_count, color = condition, fill = condition
+)) +
+  geom_boxplot(
+    alpha = 0.6,
+    width = 0.4,
+    position = position_dodge(0.8),
+    size = 0.6
+  ) +
+  geom_jitter(
+    shape = 21,
+    fill = "white",
+    size = 1.6,
+    stroke = 0.8,
+    position = position_dodge(0.8)
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 12, face = "plain"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12, face = "plain"),
+    strip.text = element_text(size = 10, face = "plain", hjust = 0.5),
+    legend.title = element_blank(),
+    legend.text = element_text(size = 10),
+    legend.position = "bottom",
+    axis.title = element_text(size = 10),
+    axis.text.x = element_blank(),
+    panel.spacing.x = unit(1, "mm")
+  ) +
+  labs(
+    x = "Condition",
+    y = expression(paste("Log"[2], " (VST) transformed count")) # batch variation removed
+  ) +
+  facet_wrap(~subunit, ncol = 10)
+
+ggsave(
+  filename = here::here(
+    "results", "2015-harrison_queen_worker_whole_body",
+    "2020-07-28-quality_assessment", "bter_harrison_vst_nachrs_boxplots.pdf"
+  ),
+  width = 10,
+  height = 5,
+  units = "in"
+)
+```
+
+## Principal component plot of the samples
+```{r}
+pca_data <- DESeq2::plotPCA(vsd,
+  intgroup = "condition",
+  n = 500,
+  returnData = TRUE
+)
+
+# Customize PCA plot
+percent_var <- round(100 * attr(pca_data, "percentVar"))
+
+ggplot(pca_data, aes(x = PC1, y = PC2, color = condition, shape = condition)) +
+  geom_point(size = 4, alpha = 0.8) +
+  # geom_point(size = 4, stroke = 1, shape = 21) +
+  xlab(paste0("PC1 [", percent_var[1], "%]")) +
+  ylab(paste0("PC2 [", percent_var[2], "%]")) +
+  coord_fixed(ratio = 1) +
+  theme(
+    legend.title = element_blank(),
+    legend.text = element_text(size = 10),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
+
+ggsave(
+  filename = here::here("results", "2015-harrison_queen_worker_whole_body",
+    "2020-07-28-quality_assessment",
+    "bter_harrison_vst_pca.pdf"),
+  width = 6,
+  height = 4,
+  units = "in"
+)
+```
