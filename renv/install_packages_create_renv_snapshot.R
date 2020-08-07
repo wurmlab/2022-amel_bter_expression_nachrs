@@ -12,7 +12,7 @@ load_cran_pkgs <- function(pkg) {
 }
 
 cran_pkgs <- c(
-  "BiocManager", "tidyverse", "RColorBrewer", "pheatmap", "styler", 
+  "devtools", "BiocManager", "tidyverse", "RColorBrewer", "pheatmap", "styler", 
   "renv", "here"
 )
 load_cran_pkgs(cran_pkgs)
@@ -30,5 +30,8 @@ bioconductor_pkgs <- c(
   "edgeR", "csaw", "vsn", "hexbin"
 )
 load_bioconductor_pkgs(bioconductor_pkgs)
+
+Sys.setenv("R_REMOTES_NO_ERRORS_FROM_WARNINGS" = TRUE)
+devtools::install_github("cttobin/ggthemr")
 
 renv::snapshot()
