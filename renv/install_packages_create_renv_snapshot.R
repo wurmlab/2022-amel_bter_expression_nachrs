@@ -1,5 +1,5 @@
 renv::init(
-  project = "~/2020-amel_bter_expression_nachrs",
+  project = "~/projects/2020-amel_bter_expression_nachrs",
   bare = TRUE, restart = FALSE
 )
 
@@ -12,7 +12,7 @@ load_cran_pkgs <- function(pkg) {
 }
 
 cran_pkgs <- c(
-  "BiocManager", "tidyverse",  "RColorBrewer", "pheatmap", "styler", 
+  "BiocManager", "tidyverse", "ggpubr", "RColorBrewer", "pheatmap", "styler", 
   "renv", "here"
 )
 load_cran_pkgs(cran_pkgs)
