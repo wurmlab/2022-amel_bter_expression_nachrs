@@ -12,7 +12,7 @@ load_cran_pkgs <- function(pkg) {
 }
 
 cran_pkgs <- c(
-  "BiocManager", "tidyverse", "ggpubr", "RColorBrewer", "pheatmap", "styler", 
+  "BiocManager", "tidyverse", "RColorBrewer", "pheatmap", "styler", 
   "renv", "here"
 )
 load_cran_pkgs(cran_pkgs)
