@@ -42,8 +42,7 @@ load_bioconductor_pkgs <- function(pkg) {
   sapply(pkg, require, character.only = TRUE)
 }
 bioconductor_pkgs <- c(
-  "biomaRt", "rhdf5", "tximport", "DESeq2", "edgeR", "csaw", "apeglm",
-  "vsn", "hexbin"
+  "biomaRt", "rhdf5", "tximport", "DESeq2", "vsn", "hexbin"
 )
 load_bioconductor_pkgs(bioconductor_pkgs)
 ```
@@ -72,37 +71,37 @@ seperately for both species.
 biomaRt::listMarts(host = "metazoa.ensembl.org")
 # biomaRt::listMarts(host = "eg40-metazoa.ensembl.org") # version 40
 
-metazoa_mart_amel <- biomaRt::useMart(
+amel_mart <- biomaRt::useMart(
   biomart = "metazoa_mart",
   dataset = "amellifera_eg_gene",
   host = "metazoa.ensembl.org"
 )
 
-metazoa_mart_bter <- biomaRt::useMart(
+bter_mart <- biomaRt::useMart(
   biomart = "metazoa_mart",
   dataset = "bterrestris_eg_gene",
   host = "metazoa.ensembl.org"
 )
 
-transcript_to_gene_amel <- biomaRt::getBM(
+amel_transcript_to_gene <- biomaRt::getBM(
   attributes = c("ensembl_transcript_id", "ensembl_gene_id"),
-  mart = metazoa_mart_amel
+  mart = amel_mart
 )
 
-transcript_to_gene_bter <- biomaRt::getBM(
+bter_transcript_to_gene <- biomaRt::getBM(
   attributes = c("ensembl_transcript_id", "ensembl_gene_id"),
-  mart = metazoa_mart_bter
+  mart = bter_mart
 )
 ```
 
 # Create vectors of nAChR gene identifiers
 ```{r}
-nachrs_amel <- c(
+amel_nachrs <- c(
   "GB42850", "GB42644", "GB47845", "GB43275", "GB50159", "GB43416", "GB53053",
   "GB40923", "GB53427", "GB53055", "GB53428"
 )
 
-nachrs_bter <- c(
+bter_nachrs <- c(
   "LOC100643274", "LOC100643282", "LOC100645032", "LOC100646787",
   "LOC100647301", "LOC100647350", "LOC100647624", "LOC100648987",
   "LOC100649515", "LOC100649612", "LOC100649796"
@@ -123,39 +122,39 @@ I imported the  `kallisto` quantifications using `tximport`. Then, I used the
 accompanying metadata to generate `DESeqDataSet` objects.
 
 ## _Apis mellifera_
-```{r import_files_&_metadata, include = FALSE}
+```{r}
 # Set sample identifiers using the names of the kallisto output directories
-sample_ids_amel <- dir(here::here(
+amel_sample_ids <- dir(here::here(
   "2015-manfredini_queen_brains", "2020-06-18-kallisto", "results"
 ))
 
 # Read metadata table
-samples_table_amel <- read.csv(
+amel_samples_table <- read.csv(
   here::here("amel_metadata", "2015-manfredini_queen_brains_metadata.csv"),
   header = TRUE,
   stringsAsFactors = TRUE
 )
 
 # Read .h5 files in
-input_files_amel <- here::here(
+amel_input_files <- here::here(
   "2015-manfredini_queen_brains", "2020-06-18-kallisto", "results",
-  samples_table_amel$sample,
+  amel_samples_table$sample,
   "abundance.h5"
 )
 
 # Assign names to files
-names(input_files_amel) <- samples_table_amel$sample
+names(amel_input_files) <- amel_samples_table$sample
 
 # Check that sample names match
-all(sample_ids_amel %in% samples_table_amel$sample)
+all(amel_sample_ids %in% amel_samples_table$sample)
 
 # Check that all files exist
-all(file.exists(input_files_amel))
+all(file.exists(amel_input_files))
 
 # Import kallisto quantifications
-txi_kallisto_amel <- tximport::tximport(input_files_amel,
+txi_kallisto_amel <- tximport::tximport(amel_input_files,
   type = "kallisto",
-  tx2gene = transcript_to_gene_amel,
+  tx2gene = amel_transcript_to_gene,
   txOut = FALSE
 )
 ```
@@ -163,50 +162,50 @@ txi_kallisto_amel <- tximport::tximport(input_files_amel,
 ## _Bombus terrestris_
 ```{r}
 # Set sample identifiers using the names of the kallisto output directories
-sample_ids_bter <- dir(here::here(
+bter_sample_ids <- dir(here::here(
   "2017-manfredini_queen_brain", "2020-08-08-kallisto", "results"
 ))
 
 # Read metadata table
-samples_table_bter <- read.csv(
+bter_samples_table <- read.csv(
   here::here("bter_metadata", "2017-manfredini_queen_brain_metadata.csv"),
   header = TRUE,
   stringsAsFactors = TRUE
 )
 
 # Read .h5 files in
-input_files_bter <- here::here(
+bter_input_files <- here::here(
   "2017-manfredini_queen_brain", "2020-08-08-kallisto", "results",
-  samples_table_bter$sample,
+  bter_samples_table$sample,
   "abundance.h5"
 )
 
 # Assign names to files
-names(input_files_bter) <- samples_table_bter$sample
+names(bter_input_files) <- bter_samples_table$sample
 
 # Check that sample names match
-all(sample_ids_bter %in% samples_table_bter$sample)
+all(bter_sample_ids %in% bter_samples_table$sample)
 
 # Check that all files exist
-all(file.exists(input_files_bter))
+all(file.exists(bter_input_files))
 
 # Import kallisto quantifications
-txi_kallisto_bter <- tximport::tximport(input_files_bter,
+bter_txi_kallisto <- tximport::tximport(bter_input_files,
   type = "kallisto",
-  tx2gene = transcript_to_gene_bter,
+  tx2gene = bter_transcript_to_gene,
   txOut = FALSE
 )
 ```
 
 # Create `DESeqDataSet` objects
 ```{r}
-dds_amel <- DESeq2::DESeqDataSetFromTximport(txi_kallisto_amel,
-  colData = samples_table_amel,
+amel_dds <- DESeq2::DESeqDataSetFromTximport(txi_kallisto_amel,
+  colData = amel_samples_table,
   design = ~1
 )
 
-dds_bter <- DESeq2::DESeqDataSetFromTximport(txi_kallisto_bter,
-  colData = samples_table_bter,
+bter_dds <- DESeq2::DESeqDataSetFromTximport(bter_txi_kallisto,
+  colData = bter_samples_table,
   design = ~1
 )
 ```
@@ -214,30 +213,30 @@ dds_bter <- DESeq2::DESeqDataSetFromTximport(txi_kallisto_bter,
 # Normalise counts and calculate expression proportions
 ```{r}
 # Pre-filter low count genes
-dds_amel <- DESeq2::estimateSizeFactors(dds_amel)
-dim(dds_amel)
-keep <- rowSums(DESeq2::counts(dds_amel) >= 10) >= 4
-dds_amel <- dds_amel[keep, ]
-dim(dds_amel)
+amel_dds <- DESeq2::estimateSizeFactors(amel_dds)
+dim(amel_dds)
+keep <- rowSums(DESeq2::counts(amel_dds) >= 10) >= 4
+amel_dds <- amel_dds[keep, ]
+dim(amel_dds)
 
-dds_bter <- DESeq2::estimateSizeFactors(dds_bter)
-dim(dds_bter)
-keep <- rowSums(DESeq2::counts(dds_bter) >= 10) >= 4
-dds_bter <- dds_bter[keep, ]
-dim(dds_bter)
+bter_dds <- DESeq2::estimateSizeFactors(bter_dds)
+dim(bter_dds)
+keep <- rowSums(DESeq2::counts(bter_dds) >= 10) >= 4
+bter_dds <- bter_dds[keep, ]
+dim(bter_dds)
 
 # Create data frames of normalised counts and calculate expression proportions
 # Discard data from divergent subunits
 divergent_subunits <- c("alpha9", "beta2")
 
 # Apis mellifera
-counts_amel <- DESeq2::counts(dds_amel, normalized = TRUE)
-counts_amel <- counts_amel %>%
+amel_counts <- DESeq2::counts(amel_dds, normalized = TRUE)
+amel_counts <- amel_counts %>%
   as.data.frame() %>%
   tibble::rownames_to_column(var = "ens_gene") %>%
   tidyr::gather(key = "sample", value = "norm_count", -ens_gene) %>%
   dplyr::mutate_if(is.numeric, round, digits = 4) %>%
-  dplyr::filter(ens_gene %in% nachrs_amel) %>%
+  dplyr::filter(ens_gene %in% amel_nachrs) %>%
   dplyr::group_by(sample) %>%
   dplyr::mutate(proportion = norm_count / sum(norm_count)) %>%
   dplyr::mutate(subunit = case_when(
@@ -256,20 +255,14 @@ counts_amel <- counts_amel %>%
   dplyr::mutate(species = "amel") %>%
   dplyr::filter(!subunit %in% divergent_subunits) # Remove divergent subunits
 
-# Bombus terrestris
-# Select 4 random samples (individuals)
-set.seed(12345)
-samples_bter <- sample(levels(dds_bter$sample), size = 4)
-
-counts_bter <- DESeq2::counts(dds_bter, normalized = TRUE)
-counts_bter <- counts_bter %>%
+bter_counts <- DESeq2::counts(bter_dds, normalized = TRUE)
+bter_counts <- bter_counts %>%
   as.data.frame() %>%
   tibble::rownames_to_column(var = "ens_gene") %>%
   tidyr::gather(key = "sample", value = "norm_count", -ens_gene) %>%
   dplyr::mutate_if(is.numeric, round, digits = 4) %>%
-  dplyr::filter(ens_gene %in% nachrs_bter) %>%
+  dplyr::filter(ens_gene %in% bter_nachrs) %>%
   dplyr::filter(ens_gene != "LOC100645032") %>% # Exclude low-expression subunit
-  dplyr::filter(sample %in% samples_bter) %>% # Filter 4 random samples
   dplyr::group_by(sample) %>%
   dplyr::mutate(proportion = norm_count / sum(norm_count)) %>%
   dplyr::mutate(subunit = case_when(
@@ -288,7 +281,7 @@ counts_bter <- counts_bter %>%
   dplyr::filter(!subunit %in% divergent_subunits) # Remove divergent subunits
 
 # Join the data frames
-counts_nachrs <- dplyr::bind_rows(counts_amel, counts_bter)
+counts_nachrs <- dplyr::bind_rows(amel_counts, bter_counts)
 
 # Recode subunit "alpha4" in Bombus terrestris
 counts_nachrs$subunit <- dplyr::recode(counts_nachrs$subunit,
@@ -330,91 +323,20 @@ ggplot(counts_nachrs, aes(
     legend.position = "bottom",
     axis.title = element_text(size = 14),
     axis.text = element_text(size = 12),
+    axis.text.x = element_text(angle = 45, hjust = 1),
     legend.text = element_text(size = 12)
   ) +
   facet_wrap(~subunit, ncol = 10)
+
+# ggsave(
+#   filename = here::here("results", "amel_bter_queens_brains_stripchart.pdf"),
+#   width = 8,
+#   height = 5,
+#   units = "in"
+# )
 ```
 
-# Convert from long to wide format and plot pairwise scatterplots
-```{r}
-proportions_wide <- counts_nachrs %>%
-  dplyr::select(sample, proportion, subunit) %>%
-  tidyr::spread(key = sample, value = proportion)
-
-# y <- counts_nachrs %>%
-#   dplyr::select(species, proportion, subunit) %>%
-#   tidyr::spread(key = subunit, value = proportion)
-# y
-
-# Shorten sample names
-proportions_wide <- proportions_wide %>%
-  dplyr::rename_with(
-    ~ paste0("amel_queen", seq_along(1:length(.)), sub("SRR17987.*", "", .)),
-    dplyr::starts_with("SRR17987")
-  ) %>%
-  dplyr::rename_with(
-    ~ paste0("bter_queen", seq_along(1:length(.)), sub("SRR5125.*", "", .)),
-    dplyr::starts_with("SRR5125")
-  )
-
-# Create pairwise scatterplots of proportions to visualise the 
-# relationship between species.
-ggplot(proportions_wide, aes(x = .panel_x, y = .panel_y, 
-  color = subunit, shape = subunit)) +
-  geom_point(size = 2, stroke = 1) +
-  geom_smooth(aes(group = 1),
-    formula = y ~ x, method = lm, se = FALSE,
-    color = "#9E9E9E", size = 0.6
-  ) +
-  scale_shape_manual(values = 0:10) +
-  scale_color_manual(breaks = subunit_breaks, values = subunit_colors) +
-  ggforce::facet_matrix(vars(2:9), layer.upper = FALSE)
-```
-
-# Calculate the pairwise correlations using Spearman's _rho_
-```{r}
-# Use this function to change the color of the trend line.
-lowerFn <- function(data, mapping, method = "lm", ...) {
-  p <- ggplot(data = data, mapping = mapping) +
-    geom_point(color = "#59BDEF", shape = 21, size = 2, stroke = 1) +
-    geom_smooth(
-      method = method, se = FALSE,
-      color = "#9E9E9E", size = 0.5, ...
-    )
-  p
-}
-
-GGally::ggpairs(proportions_wide,
-  columns = 2:9,
-  lower = list(continuous = wrap(lowerFn,
-    method = "lm"
-    # funcVal = "smooth", se = FALSE, color = "#59BDEF"
-  )),
-  diag = list(continuous = "blankDiag"),
-  upper = list(continuous = wrap(funcVal = "cor", method = "spearman"))
-) +
-  theme(
-    plot.title = element_text(hjust = 0.5, size = 16, face = "plain"),
-    strip.text = element_text(size = 12, face = "plain", hjust = 0.5),
-    strip.text.y = element_text(angle = 0),
-    strip.background = element_rect(fill = "white", color = NA),
-    panel.background = element_rect(fill = "white"),
-    legend.position = "bottom",
-    legend.text = element_text(size = 12),
-    axis.title = element_text(size = 14, angle = 45),
-    axis.text = element_text(size = 12),
-    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)
-  )
-
-# Confirm that the correlation values on the plot match the expected results
-cor.test(
-  proportions_wide$amel_queen1,
-  proportions_wide$bter_queen1,
-  method = "spearman"
-)
-```
-
-# Use the median of subunit proportions to correlate between species
+# Use the median of subunit proportions to test for correlation between species
 For each subunit per species, calculate the median over replicates. Use the 
 median values to test for the association in subunit expression between species.
 ```{r}
@@ -422,19 +344,19 @@ median_proportions <- counts_nachrs %>%
   dplyr::ungroup() %>% # Remove grouping variable previously created
   dplyr::select(species, subunit, proportion) %>%
   dplyr::group_by(species, subunit) %>%
-  dplyr::summarise_at(vars(-group_cols()), funs(median(.))) %>%
+  dplyr::summarise_at(vars(-group_cols()), ~ median(.)) %>%
   dplyr::rename(median_proportion = proportion)
 
 # Verify that the median values match the expected results
-proportions_wide %>%
-  dplyr::filter(subunit == "alpha1") %>%
-  dplyr::select(starts_with(match = "amel"))
+counts_nachrs %>%
+  dplyr::filter(subunit == "alpha1" & species == "amel") %>%
+  dplyr::pull(var = proportion)
 median(c(0.0213, 0.0264, 0.0161, 0.0310))
 # 0.02385
 
-proportions_wide %>%
-  dplyr::filter(subunit == "alpha2") %>%
-  dplyr::select(starts_with(match = "amel"))
+counts_nachrs %>%
+  dplyr::filter(subunit == "alpha2" & species == "amel") %>%
+  dplyr::pull(var = proportion)
 median(c(0.123, 0.187, 0.205, 0.201))
 # 0.194
 
@@ -448,86 +370,10 @@ cor.test(
   median_proportions_wide$bter,
   method = "spearman"
 )
-```
 
-################################################################################
-# Test for association between species proportions using Spearman's _rho_
-The "proportions" data frame created here includes only a subset of possible
-pairings of replicates per species.
-```{r}
-proportions_amel <- counts_amel %>%
-  dplyr::ungroup() %>% # Remove grouping variable previously created
-  dplyr::select(subunit, proportion) %>%
-  dplyr::rename(prop_amel = proportion) %>%
-  dplyr::arrange(subunit, prop_amel) %>%
-  dplyr::mutate_if(is.numeric, round, digits = 9)
-
-proportions_bter <- counts_bter %>%
-  dplyr::ungroup() %>% # Remove grouping variable previously created
-  dplyr::select(subunit, proportion) %>%
-  dplyr::rename(prop_bter = proportion) %>%
-  dplyr::arrange(subunit, prop_bter) %>%
-  dplyr::mutate_if(is.numeric, round, digits = 9) %>%
-  dplyr::filter(!subunit %in% divergent_subunits) # Remove divergent subunits
-
-# Recode subunit "alpha4" in Bombus terrestris
-proportions_bter$subunit <- dplyr::recode(proportions_bter$subunit,
-  "alpha4e5" = "alpha4"
-)
-
-# Bind columns
-proportions <- dplyr::bind_cols(
-  proportions_amel,
-  proportions_bter[, "prop_bter"]
-)
-
-# dir.create(here::here("results", "amel_bter_queens_comparison"),
-#   recursive = TRUE
-# )
-# 
-# write.csv(proportions,
-#   file = here::here(
-#     "results", "amel_bter_queens_comparison",
-#     "amel_bter_queens_proportions.csv"
-#   ),
-#   row.names = FALSE
-# )
-
-cor.test(~ prop_amel + prop_bter,
-  data = proportions,
-  method = "spearman",
-  continuity = FALSE,
-  conf.level = 0.95
-)
-
-# 	Spearman's rank correlation rho
-#
-# data:  prop_amel and prop_bter
-# S = 5250, p-value = 0.05414
-# alternative hypothesis: true rho is not equal to 0
-# sample estimates:
-#       rho
-# 0.3243243
-```
-
-# Create scatterplot comparing expression proportions between species
-The "proportions" data frame used here includes only a subset of possible
-pairings of replicates per species.
-```{r}
-# Match the colors assigned to subunits in other figures (Fig. 1)
-# Create vector of colors for subunits
-# Although included here, the colors of divergent subunits will not be used
-subunit_breaks <- c(
-  "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "alpha7",
-  "alpha8", "alpha9", "beta1", "beta2"
-)
-subunit_colors <- c(
-  "#59BDEF", "#EBCC2A", "#E1AF00", "#F27C8D", "#7B73D1", "#7B9FE0",
-  "#F5CC7F", "#66C2A5", "#28A7B6", "#F2CB57", "#F2A057"
-)
-
-ggplot(proportions, aes(
-  x = prop_amel, y = prop_bter, color = subunit, shape = subunit
+# Create a scatterplot with the median values
+ggplot(median_proportions_wide, aes(
+  x = amel, y = bter, color = subunit, shape = subunit
 )) +
   geom_point(size = 4, stroke = 1) +
   geom_smooth(aes(group = 1),
@@ -545,12 +391,21 @@ ggplot(proportions, aes(
     legend.text = element_text(size = 12)
   ) +
   labs(
-    title = "Expression proportions in queen brains",
+    title = "Median proportion of nAChR expression in queen brains",
     x = expression(paste(
-      "Proportion of total nAChR expression in ", italic("A. mellifera")
+      "Median proportion of nAChR expression in ", italic("A. mellifera")
     )),
     y = expression(paste(
-      "Proportion of total nAChR expression in ", italic("B. terrestris")
+      "Median proportion of nAChR expression in ", italic("B. terrestris")
     ))
   )
+
+# ggsave(
+#   filename = here::here(
+#     "results", "amel_bter_queens_brains_scatterplot_median_proportions.pdf"
+#   ),
+#   width = 7,
+#   height = 7,
+#   units = "in"
+# )
 ```
