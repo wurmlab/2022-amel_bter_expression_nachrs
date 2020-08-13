@@ -328,12 +328,12 @@ ggplot(counts_nachrs, aes(
   ) +
   facet_wrap(~subunit, ncol = 10)
 
-# ggsave(
-#   filename = here::here("results", "amel_bter_queens_brains_stripchart.pdf"),
-#   width = 8,
-#   height = 5,
-#   units = "in"
-# )
+ggsave(
+  filename = here::here("results", "amel_bter_queens_brains_stripchart.pdf"),
+  width = 8,
+  height = 5,
+  units = "in"
+)
 ```
 
 # Use the median of subunit proportions to test for correlation between species
@@ -373,15 +373,12 @@ cor.test(
 
 # Create a scatterplot with the median values
 ggplot(median_proportions_wide, aes(
-  x = amel, y = bter, color = subunit, shape = subunit
+  x = amel, y = bter, color = subunit, fill = subunit, shape = subunit
 )) +
-  geom_point(size = 4, stroke = 1) +
-  geom_smooth(aes(group = 1),
-    formula = y ~ x, method = lm, se = FALSE,
-    color = "#9E9E9E", size = 0.8
-  ) +
-  scale_shape_manual(values = 0:10) +
+  geom_point(size = 4, stroke = 2) +
+  scale_shape_manual(values = c(3, 4, 7:9, 12, 21:25)) +
   scale_color_manual(breaks = subunit_breaks, values = subunit_colors) +
+  scale_fill_manual(breaks = subunit_breaks, values = subunit_colors) +
   theme(
     plot.title = element_text(hjust = 0.5, size = 16, face = "plain"),
     strip.text = element_text(size = 12, face = "plain", hjust = 0.5),
@@ -391,21 +388,23 @@ ggplot(median_proportions_wide, aes(
     legend.text = element_text(size = 12)
   ) +
   labs(
-    title = "Median proportion of nAChR expression in queen brains",
+    title = "Proportion of nAChR subunit expression in queen brains",
     x = expression(paste(
-      "Median proportion of nAChR expression in ", italic("A. mellifera")
+      "Proportion of expression in ", 
+      italic("A. mellifera")
     )),
     y = expression(paste(
-      "Median proportion of nAChR expression in ", italic("B. terrestris")
+      "Proportion of expression in ", 
+      italic("B. terrestris")
     ))
   )
 
-# ggsave(
-#   filename = here::here(
-#     "results", "amel_bter_queens_brains_scatterplot_median_proportions.pdf"
-#   ),
-#   width = 7,
-#   height = 7,
-#   units = "in"
-# )
+ggsave(
+  filename = here::here(
+    "results", "amel_bter_queens_brains_scatterplot_median_proportions.pdf"
+  ),
+  width = 7,
+  height = 5,
+  units = "in"
+)
 ```
