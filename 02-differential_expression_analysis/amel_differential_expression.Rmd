@@ -1,0 +1,546 @@
+---
+title: "Differential expression of nAChR subunits in _Apis mellifera_"
+author: "Alicja Witwicka"
+date: '`r Sys.Date()`'
+output:
+  github_document:
+    toc: yes
+  pdf_document: 
+    fig_caption: yes
+    toc: yes
+  html_document:
+    toc: yes
+number_sections: true
+
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.path = "")
+```
+```{r libraries, echo = FALSE, message = FALSE, warning = FALSE}
+#renv::snapshot()
+```
+```{r libraries, echo = FALSE, message = FALSE, warning = FALSE}
+#Load all packages
+library("tximport")
+library("readr")
+library("ggplot2")
+library("DESeq2")
+library("dplyr")
+library("tibble")
+library("limma")
+library("ggthemr")
+library("RColorBrewer")
+library("RUVSeq")
+for (package in (.packages()) ) {
+ print(paste("Package", package, "version", packageVersion(package)))
+}
+```
+```{r colours, include = FALSE}
+# Set colours
+custom_palette <- c(
+  "#9E9E9E", "#59BDEF", "#EBCC2A", "#E1AF00", "#F27C8D", "#7B73D1", "#7B9FE0",
+  "#F5CC7F", "#66C2A5", "#28A7B6", "#F2CB57", "#F2A057", "#F2845C"
+)
+
+ggthemr::colour_plot(custom_palette)
+custom_theme <- ggthemr::define_palette(
+  swatch = custom_palette,
+  gradient = c(lower = "#59BDEF", upper = "#FF6B5A")
+)
+ggthemr::ggthemr(custom_theme)
+```
+
+## Introduction
+
+# <b>Questions:</b>
+  1. Are all nAChR subunits expressed in the9 tissues of A. mellifera?
+  2. Are all subunits expressed in the brain of A. mellifera queens and workers?
+  3. Are there differences in nAChRs expression between the studied groups?
+
+Datasets used:
+<br><b>worker brains & other tissues</b>
+<br>-Jasper et al. 2015
+<br>-Christen et al. 2018
+<br><b>queen brains</b>
+<br>-Liberti et al. 2015
+<br>-Manfredini et al. 2015
+
+## Load data and prepare it fo analysis
+- The data was loaded using tximport, metadata (.csv) was composed and imported
+
+```{r import_files_&_metadata, include = FALSE}
+### Read kallisto output and metadata ###
+# Set sample identifiers using the names of the kallisto output directories
+liberti_ids <- dir(file.path("results/2015-liberti_queen_brains/2020-06-18-kallisto/results"))
+manfredini_ids <- dir(file.path("results/2015-manfredini_queen_brains/2020-06-18-kallisto/results"))
+christen_ids <- dir(file.path("results/2018-christen_worker_brains/2020-06-18-kallisto/results"))
+jasper_ids <- dir(file.path("results/2015-jasper_worker_tissues/2020-06-16-kallisto/results/"))
+jasper_ids_brains <- tail(jasper_ids, 6) # select brains for the analysis of castes
+
+# Create sample ids vectors
+castes_ids <- c(liberti_ids, christen_ids, manfredini_ids, jasper_ids_brains)
+tissues_ids <- jasper_ids
+
+# Read metadata table
+## castes
+samples_table_castes <- read.csv(
+  file.path("amel_metadata/2020_amel_castes_brain.csv"),
+     header = TRUE,
+       stringsAsFactors = TRUE)
+## tissues
+samples_table_tissues <- read.csv(file.path("amel_metadata/2015-jasper_worker_tissues_metadata.csv"),
+     header = TRUE,
+       stringsAsFactors = TRUE)
+
+# Read .h5 files in
+## castes
+liberti_filenames <- file.path("results/2015-liberti_queen_brains/2020-06-18-kallisto/results",
+                               liberti_ids, "abundance.h5")
+manfredini_filenames <- file.path("results/2015-manfredini_queen_brains/2020-06-18-kallisto/results",
+                                  manfredini_ids, "abundance.h5")
+christen_filenames <- file.path("results/2018-christen_worker_brains/2020-06-18-kallisto/results",
+                                christen_ids, "abundance.h5")
+jasper_filenames <- file.path("results/2015-jasper_worker_tissues/2020-06-16-kallisto/results/",
+                        jasper_ids_brains, "abundance.h5")
+castes_filenames <- c(liberti_filenames, christen_filenames, manfredini_filenames, jasper_filenames)
+
+## tissues
+tissues_filenames <- file.path("results/2015-jasper_worker_tissues/2020-06-16-kallisto/results/",
+                        tissues_ids, "abundance.h5")
+
+# Assign names to files
+## castes
+names(castes_filenames) <- samples_table_castes$sample
+## tissues
+names(tissues_filenames) <- samples_table_tissues$sample
+
+# check that all files were assigned 
+all(file.exists(castes_filenames))
+all(file.exists(tissues_filenames)) 
+```
+- I used biomaRt to associate transcripts to genes (from ensmbl metazoa)
+- I imported Kallisto output
+```{r biomaRt, include = FALSE}
+#### Associate transcripts to genes ####
+biomaRt::listMarts(host = "metazoa.ensembl.org")
+# biomaRt::listMarts(host = "eg40-metazoa.ensembl.org") # version 40
+# biomaRt::listEnsemblArchives()
+metazoa_mart <- biomaRt::useMart(
+  biomart = "metazoa_mart",
+  dataset = "amellifera_eg_gene",
+  host = "metazoa.ensembl.org")
+
+transcript_to_gene <- biomaRt::getBM(
+  attributes = c("ensembl_transcript_id", "ensembl_gene_id"),
+  mart = metazoa_mart)
+
+# Remove all biomaRt cached files
+#biomaRt::biomartCacheInfo()
+#biomaRt::biomartCacheClear()
+#biomaRt::listAttributes(metazoa_mart)
+```
+```{r tximport, include = FALSE}
+# Import kallisto quantifications
+## castes
+txi_kallisto_castes <- tximport::tximport(
+  castes_filenames,
+  type = "kallisto",
+  tx2gene = transcript_to_gene,
+  txOut = FALSE
+  )
+## tissues
+txi_kallisto_tissues <- tximport::tximport(
+  tissues_filenames,
+  type = "kallisto",
+  tx2gene = transcript_to_gene,
+  txOut = FALSE
+  )
+
+```
+# Create vector of nAChR gene identifiers
+```{r gene_vector, message = FALSE}
+gene_id <- c(
+  "GB40923", "GB53053", "GB42644", "GB53055", "GB47845", "GB43416", 
+  "GB42850", "GB43275", "GB53427", "GB53428", "GB50159"
+  )
+names_AChRs <- c(
+  "alpha8","alpha7","alpha2","beta1","alpha3","alpha6","alpha1",
+  "alpha4","alpha9","beta2","alpha5"
+  )
+```
+
+### Analisis of castes 
+# Studies:
+Datasets used:
+<br><b>worker brains</b>
+<br>-Jasper et al. 2015
+<br>-Christen et al. 2018
+<br><b>queen brains</b>
+<br>-Liberti et al. 2015
+<br>-Manfredini et al. 2015
+
+- Before using DESeq2 I remove unvanted study using RUVSeq
+
+```{r RUVSeq, message= FALSE}
+
+# Set variables for the model
+caste <- as.character(unique(samples_table_castes$sample))
+study <- as.character(unique(samples_table_tissues$sample))
+
+# Create a DESeq object design: ~caste
+dds_castes <- DESeq2::DESeqDataSetFromTximport(txi_kallisto_castes,
+                                        colData = samples_table_castes,
+                                        design = ~ caste)
+# Select expressed genes
+dim(dds_castes) #15314 18
+# At least 4 samples with a count of 10 or higher
+# The number of samples would be set to the smallest group size
+keep <- rowSums(DESeq2::counts(dds_castes) >= 10) >= 4
+dds_castes <- dds_castes[keep,]
+dim(dds_castes) #12042 18
+
+# Run DESeq2 pipeline prior to RUVSeq
+castes_dds1 <- DESeq2::DESeq(dds_castes, test = "Wald", betaPrior = FALSE)
+DESeq2::resultsNames(castes_dds1)
+castes_results1 <- DESeq2::results(castes_dds1)
+
+# Run RUVSeq (remove unwanted variance)
+## Extract raw counts from dds object
+castes_set <- EDASeq::newSeqExpressionSet(DESeq2::counts(dds_castes))
+## Normalize the data using upper-quartile (UQ) normalization
+castes_set <- EDASeq::betweenLaneNormalization(castes_set, which="upper")
+## Select a set of genes which are not signifficant - not affected by the batch (by defaoul can be homekeeping genes)
+not.sig <- rownames(castes_results1)[which(castes_results1$pvalue > 0.4)]
+empirical <- rownames(castes_set)[ rownames(castes_set) %in% not.sig ]
+## RUVg uses negative control genes, assumed to have constant expression across samples
+castes_set <- RUVSeq::RUVg(castes_set, empirical, k=1)
+# Calculate covariant for the new model (accounting for the study effect)
+covariant <- pData(castes_set)
+
+# Transform for ggplot2
+cov_1 <- covariant[,1] %>% 
+  as.data.frame()
+rownames(cov_1) <- samples_table_castes[,1]
+study <- data.frame(samples_table_castes[,4])
+rownames(study) <- samples_table_castes[,1]
+df_merged <- merge(cov_1, study, by = 0)
+
+# Boxplot
+ggplot(df_merged, aes(x = samples_table_castes...4., y = .)) +
+  geom_boxplot(aes(colour = samples_table_castes...4.),fill="white") + 
+  geom_jitter(aes(colour = samples_table_castes...4.)) 
+
+# Test if extrapolated variables overlap with the study effect 
+summary(glm(df_merged$. ~ df_merged$samples_table_castes...4.))
+```
+
+```{r DESeq2_results, message=FALSE}
+
+# Add calculated covariate to metadata table 
+colnames(cov_1) <- c("covariate")
+cov_1$sample <- samples_table_castes[,1]
+merged_samples_table <- merge(samples_table_castes, cov_1, by="sample")
+
+
+## RUN DESEQ2 AGAIN
+cast <- as.character(unique(merged_samples_table$condition))
+study <- as.character(unique(merged_samples_table$study))
+covariate <- as.numeric(unique(merged_samples_table$covariate))
+
+# Create a DESeq object
+dds_castes2 <- DESeq2::DESeqDataSetFromTximport(txi_kallisto_castes,
+                                        colData = merged_samples_table,
+                                        design = ~ caste + covariate )
+
+# Select expressed genes
+dim(dds_castes2)  # 15314    18
+keep <- rowSums(DESeq2::counts(dds_castes2) >= 10) >= 4
+dds_castes2 <- dds_castes2[keep,]
+dim(dds_castes2) # 12042    18
+
+# Run DESeq2
+castes_dds2 <- DESeq2::DESeq(dds_castes2)
+DESeq2::resultsNames(castes_dds2)
+
+# Model results: cast
+res_castes <- results(castes_dds2, contrast = c("caste", "worker", "queen"))
+
+# Select genes of interest
+res_castes <- res_castes[gene_id,]
+rownames(res_castes) <- names_AChRs
+res_castes 
+
+write.csv(res_castes,
+  file = here::here(
+    "results", "amel_castes_ruvseq_deseq2_wald_res_nachrs.csv"
+  ),
+  row.names = FALSE
+)
+
+```
+
+### Analisis of castes 
+Datasets used:
+<br><b>9 forager/nurse tissues</b>
+<br>-Jasper et al. 2015
+
+```{r filtering, message = FALSE, warning = FALSE}
+
+# Set variables for the model (tissues)
+condition <- samples_table_tissues %>%
+  dplyr::pull(tissue) %>%
+  unique() %>%
+  as.character()
+
+# Set the reference level: mitgut
+samples_table_tissues$condition <- relevel(
+  samples_table_tissues$tissue,
+   ref = "midgut"
+)
+
+# Create a DESeq object (for mitgut comparison)
+dds_tissues <- DESeq2::DESeqDataSetFromTximport(txi_kallisto_tissues,
+                                        colData = samples_table_tissues,
+                                        design = ~ tissue
+)
+# Show table of sample information
+colData(dds_tissues)
+# Show number of replicates per condition
+with(colData(dds_tissues), table(condition))
+# Estimate the size factors
+dds_tissues <- DESeq2::estimateSizeFactors(dds_tissues)
+# With tximport, we compute gene x sample normalization factors
+DESeq2::normalizationFactors(dds_tissues) %>% head()
+# Pre-filter the dataset
+dim(dds_tissues) # 15314    48
+keep <- rowSums(DESeq2::counts(dds_tissues) >= 10) >= 4
+dds_tissues <- dds_tissues[keep,]
+dim(dds_tissues) # 12983    48
+```
+
+```{r DESeq2_data, message = FALSE, warning = FALSE}
+
+# Run differential expression analyses
+dds_tissues <- DESeq2::DESeq(dds_tissues, test = "Wald", betaPrior = FALSE)
+DESeq2::resultsNames(dds_tissues)
+
+# Create list of contrasts
+contrasts <- combn(x = condition, m = 2) %>%
+  t() %>%
+  as.data.frame.array() %>%
+  dplyr::rename(cond1 = V1, cond2 = V2) %>%
+  dplyr::mutate(contrast = paste0(cond1, "_vs_", cond2))
+
+res_contrasts <- list()
+for (row in 1:nrow(contrasts)) {
+  cond1 <- as.character(contrasts[row, "cond1"])
+  cond2 <- as.character(contrasts[row, "cond2"])
+  res_contrasts[[row]] <- DESeq2::results(
+    dds_tissues,
+    contrast = c("condition", cond1, cond2),
+    lfcThreshold = 0,
+    alpha = 0.1,
+    pAdjustMethod = "BH"
+  )
+}
+names(res_contrasts) <- contrasts$contrast
+
+res_nachrs <- list()
+for (contrast in contrasts$contrast) {
+  res_nachrs[[contrast]] <- res_contrasts[[contrast]] %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column(var = "ens_gene") %>%
+    dplyr::mutate(contrast = contrast) %>%
+    dplyr::filter(ens_gene %in% nachrs) %>%
+    dplyr::mutate(subunit = case_when(
+      ens_gene == "GB40923" ~ "alpha8",
+      ens_gene == "GB53053" ~ "alpha7",
+      ens_gene == "GB42644" ~ "alpha3",
+      ens_gene == "GB53055" ~ "beta1",
+      ens_gene == "GB47845" ~ "alpha3",
+      ens_gene == "GB43416" ~ "alpha6",
+      ens_gene == "GB42850" ~ "alpha1",
+      ens_gene == "GB43275" ~ "alpha4",
+      ens_gene == "GB53427" ~ "alpha9",
+      ens_gene == "GB53428" ~ "beta2",
+      ens_gene == "GB50159" ~ "alpha5",
+    )) %>%
+    dplyr::mutate(regulation = ifelse(log2FoldChange > 0, "up", "down")) %>%
+    dplyr::mutate(significance = ifelse(padj < 0.05, "sig", "notsig")) %>%
+    dplyr::mutate_if(is.numeric, round, digits = 4)
+}
+res_nachrs <- dplyr::bind_rows(res_nachrs)
+res_nachrs
+
+# Write table of `DESeq2` Wald test results
+write.csv(res_nachrs, 
+          file = here::here(
+    "results", "2015-jasper_worker_tissues", "amel_jasper_tissues_deseq2_wald_res_nachrs.csv"), 
+    row.names = FALSE
+)
+
+table(res_nachrs$significance)
+table(res_nachrs$subunit, res_nachrs$significance)
+```
+
+### Data visualisation - supplementary materials 
+(I put it here as we have RUVseq in this dataset - I don't know if running it 3 time seperately in each script is a great idea, but I can split these scripts to match bter ones)
+
+### Castes - visualisation
+```{r vst_castes, message = FALSE, warning = FALSE}
+# Calcutalte VST
+vst_castes <- vst(dds_castes2, blind = FALSE) %>% assay()
+vst_castes <- vst_castes[gene_id,]
+rownames(vst_castes) <- names_AChRs
+```
+
+```{r pca_castes, message = FALSE, warning = FALSE}
+# Plot PCA
+# flip data frame
+vst_castes_t <- t(vst_castes)
+# perform pca
+pca_res_castes <- prcomp(vst_castes_t, scale.=FALSE)
+summary(pca_res_castes)
+# transform data frame for ggplot2
+# call out another dimention from pca output
+res_out_castes <- as.data.frame(pca_res_castes$x)
+# rownames to column to get another variable to manipulate colours in ggplot2
+res_out_castes <- res_out_castes %>% rownames_to_column("cast")
+# add study as a column
+res_out_castes <- res_out_castes %>% mutate(study = cast) %>% mutate_all(~gsub("_1|_2|_3|_4|_5|_n1|_n2|_n3|_f1|_f2|_f3", "", .)) 
+
+# remove redundant digits and patterns
+res_out_castes$cast <- stringr::str_remove(res_out_castes$cast, "_virgin|_sugar_exposed|_mock_insemination")
+res_out_castes$study <- stringr::str_remove(res_out_castes$study, "_queen|_worker|_brain")
+res_out_castes$cast <- gsub("SRR.{6,7}_", "", res_out_castes$cast)
+res_out_castes$cast <- gsub("brain", "worker", res_out_castes$cast)
+res_out_castes$study <- gsub("SRR.{6,7}_", "", res_out_castes$study)
+res_out_castes$study <- gsub("SRR.{6,7}", "jasper", res_out_castes$study)
+
+#change to numeric 
+sapply(res_out_castes, mode)
+res_out_castes <- transform(res_out_castes, PC1 = as.numeric(PC1), 
+                         PC2 = as.numeric(PC2), PC3 = as.numeric(PC3), PC4 = as.numeric(PC4))
+ggplot(res_out_castes, aes(x=PC1, y=PC2, colour=cast)) + 
+  geom_point(aes(pch=study)) + theme_classic() +
+  theme(axis.title.x = element_text(colour="gray20", size=12),
+        axis.title.y = element_text(colour="gray20", size=12),
+        axis.text.x = element_text(colour="gray20", size=10),
+        axis.text.y = element_text(colour="gray20", size=10))
+ggplot(res_out_castes, aes(x=PC1, y=PC3, colour=cast)) + 
+  geom_point(aes(pch=study)) + theme_classic() +
+  theme(axis.title.x = element_text(colour="gray20", size=12),
+        axis.title.y = element_text(colour="gray20", size=12),
+        axis.text.x = element_text(colour="gray20", size=10),
+        axis.text.y = element_text(colour="gray20", size=10))
+ggplot(res_out_castes, aes(x=PC2, y=PC3, colour=cast)) + 
+  geom_point(aes(pch=study)) + theme_classic() +
+  theme(axis.title.x = element_text(colour="gray20", size=12),
+        axis.title.y = element_text(colour="gray20", size=12),
+        axis.text.x = element_text(colour="gray20", size=10),
+        axis.text.y = element_text(colour="gray20", size=10))
+```
+```{r boxplot_castes, message = FALSE, warning = FALSE}
+# Plot boxplot
+vst_castes <- vst_castes %>% as.data.frame() %>% tibble::rownames_to_column("AChRs")
+vst_castes<- data.frame(vst_castes[1], stack(vst_castes[2:ncol(vst_castes)]))
+col_names_plot <- c("nAChRs", "vst", "cast")
+colnames(vst_castes) <- col_names_plot
+
+bxp.vst_castes <- vst_castes %>% mutate_all(~gsub("_1|_2|_3|_4|_5|_n1|_n2|_n3|_f1|_f2|_f3", "", .)) %>% mutate_all(~gsub("_virgin|_sugar_exposed|_mock_insemination", "", .))
+bxp.vst_castes$cast <- gsub("SRR.{6,7}_", "", bxp.vst_castes$cast)
+bxp.vst_castes$cast <- gsub("brain", "worker", bxp.vst_castes$cast)
+bxp.vst_castes[,2] <- as.numeric(bxp.vst_castes$vst)
+#
+ggplot(data=bxp.vst_castes, aes(x=cast, y=vst, colour=cast)) + facet_grid(~ nAChRs) +
+  geom_boxplot(fill="white") + ylab("vst") + xlab("casts") +
+  geom_jitter(size=1.2, pch=16, aes(colour=cast), alpha=0.45) + 
+  scale_y_sqrt() + 
+  theme(axis.title.x = element_text(colour="gray20", size=12),
+        axis.title.y = element_text(colour="gray20", size=12),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(colour="gray20", size=10)) #scale_color_brewer(palette="Dark2")
+
+```
+### Tissues - visualisation
+```{r vst_tissues, message = FALSE, warning = FALSE}
+# Calcutalte VST
+vst_tissues <- vst(dds_tissues, blind = FALSE) %>% assay()
+vst_tissues <- vst_tissues[gene_id,]
+rownames(vst_tissues) <- names_AChRs
+```
+
+```{r pca_tissues, message = FALSE, warning = FALSE}
+# Plot PCA
+
+# flip data frame
+vst_tissues_t <- t(vst_tissues)
+# perform pca
+pca_res_tissues <- prcomp(vst_tissues_t, scale.=FALSE)
+summary(pca_res_tissues)
+# transform data frame for ggplot2
+# call out another dimention from pca output
+res_out_tissues <- as.data.frame(pca_res_tissues$x)
+# rownames to column to get another variable to manipulate colours in ggplot2
+res_out_tissues <- res_out_tissues %>% rownames_to_column("tissue")
+# remove redundant digits 
+res_out_tissues <- res_out_tissues %>% mutate_all(~gsub("_f1|_f2|_f3|_n1|_n2|_n3", "", .))
+res_out_tissues$tissue <- gsub("SRR.{6,7}_", "", res_out_tissues$tissue)
+res_out_tissues$tissue <- gsub("thoracic_ganglia", "thoracic_ganglion", res_out_tissues$tissue)
+#change to numeric 
+sapply(res_out_tissues, mode)
+res_out_tissues <- transform(res_out_tissues, PC1 = as.numeric(PC1), 
+                         PC2 = as.numeric(PC2), PC3 = as.numeric(PC3), PC4 = as.numeric(PC4))
+# Set colour palletes 
+tissue_colour <- c("#0A494B", "#208B8E", "#59BDEF", "#F9ED69", "#EBCC2A", "#E1AF00", "#F08A5D", "#FF9671", "#FF6B5A", "#D65DB1", "#FF6F91", "#D16E8B", "#B65DBF")
+tissue_breaks <- c("antenna", "midgut", "hypopharyngeal gland", "malpighian tubule", "mandigular gland", "muscle", 
+                   "Nasonov's gland", "3rd thoracic ganglion", "brain")
+tissue_shape <- c(16,17,15,16,17,15,16,17,15,16,17,15)
+#
+ggplot(res_out_tissues, aes(x=PC1, y=PC2, colour=tissue, pch=tissue)) + 
+  geom_point(size = 3, alpha = 0.8) +
+  xlab(paste0("PC1 [73%]")) +
+  ylab(paste0("PC2 [13%]")) +
+  coord_fixed(ratio = 1) +
+  #theme(axis.title.x = element_text(colour="gray20", size=12),
+   #     axis.title.y = element_text(colour="gray20", size=12),
+    #    axis.text.x = element_text(colour="gray20", size=10),
+      #  axis.text.y = element_text(colour="gray20", size=10)) +
+  scale_fill_manual(values = tissue_colour) +
+  scale_color_manual(values = tissue_colour) + 
+  scale_shape_manual(values = tissue_shape)
+```
+
+```{r boxplot_tissues, message = FALSE, warning = FALSE}
+vst_tissues <- vst_tissues %>% as.data.frame()
+vst_tissues <- vst_tissues[ , order(names(vst_tissues))]
+vst_tissues_plot <- vst_tissues %>% tibble::rownames_to_column("AChRs")
+vst_tissues_plot<- data.frame(vst_tissues_plot[1], stack(vst_tissues_plot[2:ncol(vst_tissues_plot)]))
+col_names_plot <- c("nAChRs", "vst", "tissue")
+colnames(vst_tissues_plot) <- col_names_plot
+
+# Add group collumn
+vst_tissues_plot <- vst_tissues_plot %>% mutate(group = tissue)
+vst_tissues_plot$group <- stringr::str_remove(vst_tissues_plot$group, "_f1|_f2|_f3|_n1|_n2|_n3")
+vst_tissues_plot$group <- gsub("SRR.{6,7}_", "", vst_tissues_plot$group)
+vst_tissues_plot$group <- gsub("_", " ", vst_tissues_plot$group)
+vst_tissues_plot$group <- gsub("ganglia", "ganglion", vst_tissues_plot$group)
+# Plot heatmap
+ggplot(vst_tissues_plot, aes(x=tissue, y=nAChRs, fill=vst)) + 
+  geom_tile(color="white") + 
+  scale_fill_gradient(low = "wheat", high = "turquoise4") + 
+  theme_minimal() + 
+  facet_grid(~group, switch = "x", scales = "free_x", space = "free_x") +
+ # theme(axis.text.x=element_text(angle=65, hjust=1)) 
+  xlab("tissues") +
+  ylab("nAChRs") +
+  theme(axis.title.x = element_text(colour="gray20", size=12),
+        axis.title.y = element_text(colour="gray20", size=12),
+        axis.text.x = element_blank(),
+        axis.text.y = element_text(colour="gray20", size=10)) + 
+  theme(strip.text.x = element_text(size = 10, color = "grey20", angle=90
+                                    , hjust = 1, vjust = 1))
+
+```
+

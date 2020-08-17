@@ -1,0 +1,301 @@
+---
+title: "workers_species_comparison"
+author: "Alicja Witwicka"
+date: "16/06/2020"
+output:
+  github_document:
+    toc: yes
+  pdf_document: 
+    fig_caption: yes
+    toc: yes
+  html_document:
+    toc: yes
+number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r libraries, echo = FALSE, message = FALSE, warning = FALSE}
+#renv::snapshot()
+```
+```{r libraries, echo = FALSE, message = FALSE, warning = FALSE}
+#Load all packages
+library("tximport")
+library("readr")
+library("ggplot2")
+library("DESeq2")
+library("dplyr")
+library("tibble")
+library("MASS")
+library("e1071")
+for (package in (.packages()) ) {
+ print(paste("Package", package, "version", packageVersion(package)))
+}
+
+# Set colour palletes 
+custom_palette <- c(
+  "#9E9E9E", "#59BDEF", "#EBCC2A", "#E1AF00", "#F27C8D", "#7B73D1", "#7B9FE0",
+  "#F5CC7F", "#66C2A5", "#28A7B6", "#F2CB57", "#F2A057", "#F2845C"
+)
+custom_theme <- ggthemr::define_palette(
+  swatch = custom_palette,
+  gradient = c( upper = "#59BDEF", lower = "#E1AF00" ))
+ggthemr::ggthemr(custom_theme)
+ggthemr::colour_plot(custom_palette)
+
+```
+## Introduction
+
+# <b>Questions:</b>
+  1. Are there differences in the usage of nAChR subunits in the workers brains of A. mellifera and B. terrestris?
+Datasets used:
+<br>-Jasper et al. 2015 (apis)
+<br>-Porath et al. 2019 (bter)
+## Load data and prepare it fo analysis
+- The data was loaded using tximport, metadata (.csv) was composed and imported
+
+```{r import_files_&_metadata, include = FALSE}
+# Read kallisto output and metadata #
+#############
+### AMEL ###
+############
+# Set sample identifiers using the names of the kallisto output directories
+sample_amel <- dir(file.path("results/2015-jasper_worker_tissues/2020-06-16-kallisto/results/"))
+sample_amel <- tail(sample_amel, 6)
+# Read metadata table
+samples_amel <- read.csv(
+  file.path("amel_metadata/2015-jasper_worker_tissues_metadata.csv"),
+     header = TRUE,
+       stringsAsFactors = TRUE)
+samples_amel <- tail(samples_amel, 6)
+
+# Read .h5 files in
+filenames_amel <- file.path(
+  "results/2015-jasper_worker_tissues/2020-06-16-kallisto/results/",
+  samples_amel$sample,
+  "abundance.h5")
+
+# Assign names to files
+names(filenames_amel) <- samples_amel$sample
+
+# check that all files were assigned 
+all(file.exists(filenames_amel)) 
+#############
+### BTER ###
+############
+# Set sample identifiers using the names of the kallisto output directories
+sample_bter <- dir(file.path("results/2019-porath_worker_brain/2020-07-14-kallisto/results"))
+
+# Read metadata table
+samples_bter <- read.csv(
+  file.path("bter_metadata/2019-porath_worker_brains_metadata.csv"),
+     header = TRUE,
+       stringsAsFactors = TRUE)
+
+# Read .h5 files in
+filenames_bter <- file.path(
+  "results/2019-porath_worker_brain/2020-07-14-kallisto/results",
+  samples_bter$sample,
+  "abundance.h5")
+
+# Assign names to files
+names(filenames_bter) <- samples_bter$sample
+
+# check that all files were assigned 
+all(file.exists(filenames_bter)) 
+```
+- I used biomaRt to associate transcripts to genes (from ensmbl metazoa) seperately for both species...
+- I imported Kallisto output
+
+```{r biomaRt_tximport, include = FALSE}
+#### Associate transcripts to genes ####
+
+# Remove all biomaRt cached files
+#biomaRt::biomartCacheInfo()
+#biomaRt::biomartCacheClear()
+#biomaRt::listAttributes(metazoa_mart_bter)
+#biomaRt::listAttributes(metazoa_mart_amel)
+
+biomaRt::listMarts(host = "metazoa.ensembl.org")
+# biomaRt::listMarts(host = "eg40-metazoa.ensembl.org") # version 40
+# biomaRt::listEnsemblArchives()
+metazoa_mart_amel <- biomaRt::useMart(
+  biomart = "metazoa_mart",
+  dataset = "amellifera_eg_gene",
+  host = "metazoa.ensembl.org")
+#
+metazoa_mart_bter <- biomaRt::useMart(
+  biomart = "metazoa_mart",
+  dataset = "bterrestris_eg_gene",
+  host = "metazoa.ensembl.org")
+
+transcript_to_gene_amel <- biomaRt::getBM(
+  attributes = c("ensembl_transcript_id", "ensembl_gene_id"),
+  mart = metazoa_mart_amel)
+#
+transcript_to_gene_bter <- biomaRt::getBM(
+  attributes = c("ensembl_transcript_id", "ensembl_gene_id"),
+  mart = metazoa_mart_bter)
+
+# Import kallisto quantifications
+txi_kallisto_amel <- tximport::tximport(filenames_amel,
+  type = "kallisto",
+  tx2gene = transcript_to_gene_amel,
+  txOut = FALSE)
+#
+txi_kallisto_bter <- tximport::tximport(filenames_bter,
+  type = "kallisto",
+  tx2gene = transcript_to_gene_bter,
+  txOut = FALSE)
+```
+# 1.Extracting abundances from the data and making a data frame for both species. 
+# 2.Extracting genes of interest (seperate).
+
+```{r ratios, include = FALSE}
+dds_amel <- DESeq2::DESeqDataSetFromTximport(txi_kallisto_amel,
+                                        colData = samples_amel,
+                                        design = ~ 1)
+dds_bter <- DESeq2::DESeqDataSetFromTximport(txi_kallisto_bter,
+                                        colData = samples_bter,
+                                        design = ~ 1)
+
+dds_amel <- DESeq2::estimateSizeFactors(dds_amel)
+dds_amel <- DESeq2::counts(dds_amel, normalized = TRUE)
+dim(dds_amel)
+keep <- rowSums(dds_amel>= 10) >= 4
+dds_amel <- dds_amel[keep,]
+dim(dds_amel)
+
+dds_bter <- DESeq2::estimateSizeFactors(dds_bter)
+dds_bter <- DESeq2::counts(dds_bter, normalized = TRUE)
+dim(dds_bter)
+keep <- rowSums(dds_bter >= 10) >= 4
+dds_bter <- dds_bter[keep,]
+dim(dds_bter)
+
+# Extract genes of interest
+
+amel_nachrs <- c("GB40923", "GB53053", "GB42644", 
+             "GB53055", "GB47845", "GB43416", 
+             "GB42850", "GB43275", "GB53427", 
+             "GB53428", "GB50159")
+names_achrs_amel <- c("alpha8","alpha7","alpha2","beta1","alpha3",
+                 "alpha6","alpha1","alpha4","alpha9","beta2","alpha5")
+gene_amel <- dds_amel[amel_nachrs,]
+row.names(gene_amel) <- names_achrs_amel
+
+
+bter_nachrs <- c(
+  "LOC100643274", "LOC100643282", 
+  "LOC100647301", "LOC100647350", "LOC100647624", "LOC100648987",
+  "LOC100649515", "LOC100649612", "LOC100649796", "LOC100646787"
+  )
+names_achrs_bter <- c(
+  "alpha6", "alpha8", "alpha2", "alpha3", "alpha1", "alpha4", "alpha5", "beta1", "alpha7", "beta2"
+  )
+gene_bter <- dds_bter[bter_nachrs,]
+row.names(gene_bter) <- names_achrs_bter
+```
+
+```{r normalisation, message = FALSE}
+# Calculate sums of each collumn
+col_sum_amel <- as.data.frame(gene_amel) %>% dplyr::summarize_if(is.numeric, sum)
+col_sum_amel
+col_sum_bter <- as.data.frame(gene_bter) %>% dplyr::summarize_if(is.numeric, sum)
+col_sum_bter
+
+
+ratios_amel <- mapply('/', as.data.frame(gene_amel), col_sum_amel)
+row.names(ratios_amel) <- names_achrs_amel
+
+ratios_bter <- mapply('/', as.data.frame(gene_bter), col_sum_bter)
+row.names(ratios_bter) <- names_achrs_bter
+
+```
+
+```{r}
+ratios_amel
+ratios_bter
+
+# Transform amel
+ratios_amel_median <- apply(ratios_amel, 1, FUN = median)
+
+# Transform bter
+ratios_bter_median <- apply(ratios_bter, 1, FUN = median)
+
+# Remove divergent subunits amel
+ratios_amel_median <- ratios_amel_median %>% as.data.frame() %>% tibble::rownames_to_column()
+ratios_amel_median <- subset(ratios_amel_median, rowname!="alpha9" & rowname!="beta2")
+
+# Remove divergent subunits bter
+ratios_bter_median <- ratios_bter_median %>% as.data.frame() %>% tibble::rownames_to_column()
+ratios_bter_median <- subset(ratios_bter_median, rowname!="alpha9" & rowname!="beta2")
+
+
+```
+
+```{r}
+
+# Sort by nAChRs and sample
+ratios_amel <- ratios_amel_median[with(ratios_amel_median, order(ratios_amel_median$rowname)),]
+colnames(ratios_amel) <- c("nAChRs_amel", "value_amel")
+ratios_bter <- ratios_bter_median[with(ratios_bter_median, order(ratios_bter_median$rowname)),]
+colnames(ratios_bter) <- c("nAChRs_bter", "value_bter")
+# Join the data frames
+ratios_both <- dplyr::bind_cols(ratios_bter, ratios_amel)
+sapply(ratios_both, mode)
+```
+
+
+
+
+```{r test, message = FALSE}
+
+# Checking for distribution 
+hist(ratios_both$value_amel)
+hist(ratios_both$value_bter)
+
+dens_amel <- density(ratios_both$value_amel)
+dens_bter <- density(ratios_both$value_bter)
+plot(dens_amel)
+plot(dens_bter)
+
+
+# Testing non-parametric Spearman's correlation
+cor.test( ~ value_amel + value_bter,
+         data=ratios_both,
+         method = "spearman",
+         continuity = FALSE,
+         conf.level = 0.95)
+
+
+```
+
+
+
+```{r plots, message = FALSE}
+pch_nachrs <- c(15,16,17,18,19,0,1,2,5,8,3)
+
+#plot
+ggplot2::ggplot(ratios_both) + geom_abline(colour = "grey", linetype = "dashed") + 
+  geom_point(size = 2, aes(x = value_bter, y = value_amel, colour=nAChRs_amel, pch=nAChRs_amel)) + 
+  geom_smooth(formula = y ~ x, colour = "black", size = 0.7, method="lm", se = FALSE, aes(x = value_bter, y = value_amel)) + #facet_wrap(~caste, scales = "free_y") +
+  xlab("Proportion of nAChRs expression in"~italic("B. terrestris")) +
+  ylab("Proportion of nAChRs expression in"~italic("A. mellifera")) +
+  theme(axis.title.x = element_text(colour="gray20", size=10),
+        axis.title.y = element_text(colour="gray20", size=10),
+        axis.text.x = element_text(colour="gray20", size=10),
+        axis.text.y = element_text(colour="gray20", size=10)) + geom_segment(x = 0, y = 0.4, xend = 0, yend = 0.7, colour = "grey", linetype = "dashed") + scale_shape_manual(values = pch_nachrs)
+
+
+
+
+amel_side <- ggplot(species, aes(x= amel_tpm, fill=nAChRs...1)) + 
+geom_histogram() 
+amel_side
+bter_side <- ggplot(species, aes(x= bter_tpm, fill=nAChRs...1)) + 
+geom_histogram() 
+bter_side
+```
+``` {r}

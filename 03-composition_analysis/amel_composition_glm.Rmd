@@ -1,0 +1,448 @@
+---
+title: "Composition analysis of nAChR genes in _Apis mellifera_ using `DESeq2`"
+author: "Alicja Witwicka"
+date: '`r Sys.Date()`'
+output:
+  github_document:
+    toc: yes
+  pdf_document: 
+    fig_caption: yes
+    toc: yes
+  html_document:
+    toc: yes
+number_sections: true
+
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.path = "")
+```
+```{r libraries, echo = FALSE, message = FALSE, warning = FALSE}
+# renv::snapshot()
+```
+```{r libraries, echo = FALSE, message = FALSE, warning = FALSE}
+# Load all packages
+library("tidyverse")
+library("tximport")
+library("readr")
+library("ggplot2")
+library("DESeq2")
+library("dplyr")
+library("tibble")
+library("limma")
+library("ggthemr")
+for (package in (.packages())) {
+  print(paste("Package", package, "version", packageVersion(package)))
+}
+```
+```{r colours, include = FALSE}
+# Set colours
+custom_palette <- c(
+  "#9E9E9E", "#59BDEF", "#EBCC2A", "#E1AF00", "#F27C8D", "#7B73D1", "#7B9FE0",
+  "#F5CC7F", "#66C2A5", "#28A7B6", "#F2CB57", "#F2A057", "#F2845C"
+)
+
+# ggthemr::colour_plot(custom_palette)
+
+ggthemr::colour_plot(custom_palette)
+custom_theme <- ggthemr::define_palette(
+  swatch = custom_palette,
+  gradient = c(lower = "#59BDEF", upper = "#FF6B5A")
+)
+ggthemr::ggthemr(custom_theme)
+```
+
+## Introduction
+
+# <b>Questions:</b>
+  1. What is the ratio of subunits used in different tissues and castes in Apis mellifera.
+
+Datasets used:
+<br><b>worker brains & other tissues</b>
+<br>-Jasper et al. 2015
+<br>-Christen et al. 2018
+<br><b>queen brains</b>
+<br>-Liberti et al. 2015
+<br>-Manfredini et al. 2015
+
+## Load data and prepare it for analysis
+- The data was loaded using tximport, metadata (.csv) was composed and imported
+
+```{r import_files_&_metadata, include = FALSE}
+### Read kallisto output and metadata ###
+# Set sample identifiers using the names of the kallisto output directories
+liberti_ids <- dir(file.path("results/2015-liberti_queen_brains/2020-06-18-kallisto/results"))
+manfredini_ids <- dir(file.path("results/2015-manfredini_queen_brains/2020-06-18-kallisto/results"))
+christen_ids <- dir(file.path("results/2018-christen_worker_brains/2020-06-18-kallisto/results"))
+jasper_ids <- dir(file.path("results/2015-jasper_worker_tissues/2020-06-16-kallisto/results/"))
+jasper_ids_brains <- tail(jasper_ids, 6) # select brains for the analysis of castes
+
+# Create sample ids vectors
+castes_ids <- c(liberti_ids, christen_ids, manfredini_ids, jasper_ids_brains)
+tissues_ids <- jasper_ids
+
+# Read metadata table
+## castes
+samples_table_castes <- read.csv(
+  file.path("amel_metadata/2020_amel_castes_brain.csv"),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+## tissues
+samples_table_tissues <- read.csv(file.path("amel_metadata/2015-jasper_worker_tissues_metadata.csv"),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+
+# Read .h5 files in
+## castes
+liberti_filenames <- file.path(
+  "results/2015-liberti_queen_brains/2020-06-18-kallisto/results",
+  liberti_ids, "abundance.h5"
+)
+manfredini_filenames <- file.path(
+  "results/2015-manfredini_queen_brains/2020-06-18-kallisto/results",
+  manfredini_ids, "abundance.h5"
+)
+christen_filenames <- file.path(
+  "results/2018-christen_worker_brains/2020-06-18-kallisto/results",
+  christen_ids, "abundance.h5"
+)
+jasper_filenames <- file.path(
+  "results/2015-jasper_worker_tissues/2020-06-16-kallisto/results/",
+  jasper_ids_brains, "abundance.h5"
+)
+castes_filenames <- c(liberti_filenames, christen_filenames, manfredini_filenames, jasper_filenames)
+
+## tissues
+tissues_filenames <- file.path(
+  "results/2015-jasper_worker_tissues/2020-06-16-kallisto/results/",
+  tissues_ids, "abundance.h5"
+)
+
+# Assign names to files
+## castes
+names(castes_filenames) <- samples_table_castes$sample
+## tissues
+names(tissues_filenames) <- samples_table_tissues$sample
+
+# check that all files were assigned
+all(file.exists(castes_filenames))
+all(file.exists(tissues_filenames))
+```
+- I used biomaRt to associate transcripts to genes (from ensmbl metazoa)
+- I imported Kallisto output
+```{r biomaRt, include = FALSE}
+#### Associate transcripts to genes ####
+biomaRt::listMarts(host = "metazoa.ensembl.org")
+# biomaRt::listMarts(host = "eg40-metazoa.ensembl.org") # version 40
+# biomaRt::listEnsemblArchives()
+metazoa_mart <- biomaRt::useMart(
+  biomart = "metazoa_mart",
+  dataset = "amellifera_eg_gene",
+  host = "metazoa.ensembl.org"
+)
+
+transcript_to_gene <- biomaRt::getBM(
+  attributes = c("ensembl_transcript_id", "ensembl_gene_id"),
+  mart = metazoa_mart
+)
+
+# Remove all biomaRt cached files
+# biomaRt::biomartCacheInfo()
+# biomaRt::biomartCacheClear()
+# biomaRt::listAttributes(metazoa_mart)
+```
+```{r tximport, include = FALSE}
+# Import kallisto quantifications
+## castes
+txi_kallisto_castes <- tximport::tximport(
+  castes_filenames,
+  type = "kallisto",
+  tx2gene = transcript_to_gene,
+  txOut = FALSE
+)
+## tissues
+txi_kallisto_tissues <- tximport::tximport(
+  tissues_filenames,
+  type = "kallisto",
+  tx2gene = transcript_to_gene,
+  txOut = FALSE
+)
+```
+# Create vector of nAChR gene identifiers
+```{r gene_vector, message = FALSE}
+gene_id <- c(
+  "GB40923", "GB53053", "GB42644", "GB53055", "GB47845", "GB43416",
+  "GB42850", "GB43275", "GB53427", "GB53428", "GB50159"
+)
+names_AChRs <- c(
+  "alpha8", "alpha7", "alpha2", "beta1", "alpha3", "alpha6", "alpha1",
+  "alpha4", "alpha9", "beta2", "alpha5"
+)
+```
+
+### Analisis of castes 
+# Studies:
+Datasets used:
+<br><b>worker brains</b>
+<br>-Jasper et al. 2015
+<br>-Christen et al. 2018
+<br><b>queen brains</b>
+<br>-Liberti et al. 2015
+<br>-Manfredini et al. 2015
+
+- Before using DESeq2 I remove unvanted study using RUVSeq
+
+```{r RUVSeq, message= FALSE}
+
+# Set variables for the model
+caste <- as.character(unique(samples_table_castes$sample))
+study <- as.character(unique(samples_table_tissues$sample))
+
+# Create a DESeq object design: ~caste
+dds_castes <- DESeq2::DESeqDataSetFromTximport(txi_kallisto_castes,
+  colData = samples_table_castes,
+  design = ~caste
+)
+# Select expressed genes
+dim(dds_castes) # 15314 18
+# At least 4 samples with a count of 10 or higher
+# The number of samples would be set to the smallest group size
+keep <- rowSums(DESeq2::counts(dds_castes) >= 10) >= 4
+dds_castes <- dds_castes[keep, ]
+dim(dds_castes) # 12042 18
+
+# Run DESeq2 pipeline prior to RUVSeq
+castes_dds1 <- DESeq2::DESeq(dds_castes, test = "Wald", betaPrior = FALSE)
+DESeq2::resultsNames(castes_dds1)
+castes_results1 <- DESeq2::results(castes_dds1)
+
+# Run RUVSeq (remove unwanted variance)
+## Extract raw counts from dds object
+castes_set <- EDASeq::newSeqExpressionSet(DESeq2::counts(dds_castes))
+## Normalize the data using upper-quartile (UQ) normalization
+castes_set <- EDASeq::betweenLaneNormalization(castes_set, which = "upper")
+## Select a set of genes which are not signifficant - not affected by the batch (by defaoul can be homekeeping genes)
+not.sig <- rownames(castes_results1)[which(castes_results1$pvalue > 0.4)]
+empirical <- rownames(castes_set)[rownames(castes_set) %in% not.sig]
+## RUVg uses negative control genes, assumed to have constant expression across samples
+castes_set <- RUVSeq::RUVg(castes_set, empirical, k = 1)
+# Calculate covariant for the new model (accounting for the study effect)
+covariant <- pData(castes_set)
+
+# Transform for ggplot2
+cov_1 <- covariant[, 1] %>%
+  as.data.frame()
+rownames(cov_1) <- samples_table_castes[, 1]
+study <- data.frame(samples_table_castes[, 4])
+rownames(study) <- samples_table_castes[, 1]
+df_merged <- merge(cov_1, study, by = 0)
+
+# Boxplot
+ggplot(df_merged, aes(x = samples_table_castes...4., y = .)) +
+  geom_boxplot(aes(colour = samples_table_castes...4.), fill = "white") +
+  geom_jitter(aes(colour = samples_table_castes...4.))
+
+# Test if extrapolated variables overlap with the study effect
+summary(glm(df_merged$. ~ df_merged$samples_table_castes...4.))
+```
+
+```{r DESeq2_results, message=FALSE}
+
+# Add calculated covariate to metadata table
+colnames(cov_1) <- c("covariate")
+cov_1$sample <- samples_table_castes[, 1]
+merged_samples_table <- merge(samples_table_castes, cov_1, by = "sample")
+
+
+## RUN DESEQ2 AGAIN
+cast <- as.character(unique(merged_samples_table$condition))
+study <- as.character(unique(merged_samples_table$study))
+covariate <- as.numeric(unique(merged_samples_table$covariate))
+
+# Create a DESeq object
+dds_castes2 <- DESeq2::DESeqDataSetFromTximport(txi_kallisto_castes,
+  colData = merged_samples_table,
+  design = ~ caste + covariate
+)
+```
+Use normalised counts to calculate the expression proportions per sample.
+```{r}
+
+dds_castes2 <- DESeq2::estimateSizeFactors(dds_castes2)
+dds_castes2 <- DESeq2::counts(dds_castes2, normalized = TRUE)
+# Pre-filter the dataset
+dim(dds_castes2)
+keep <- rowSums(dds_castes2 >= 10) >= 4
+dds_castes2 <- dds_castes2[keep, ]
+dim(dds_castes2)
+
+# Extract genes of interest
+gene_list_castes <- dds_castes2[gene_id, ]
+row.names(gene_list_castes) <- names_AChRs
+```
+# Normalising TPMs
+
+```{r normalisation, message = FALSE}
+# Calculate sums of each collumn
+col_sum_castes <- as.data.frame(gene_list_castes) %>% dplyr::summarize_if(is.numeric, sum)
+
+ratios_castes <- mapply("/", as.data.frame(gene_list_castes), col_sum_castes)
+row.names(ratios_castes) <- names_AChRs
+ratios_castes
+```
+
+
+# Plotting the data
+
+```{r visualisation, message = FALSE}
+# Transform data frame
+ratios_castes <- as.data.frame(ratios_castes)
+ratios_transf_castes <- ratios_castes[, order(names(ratios_castes))]
+plot.list_castes <- ratios_transf_castes %>% tibble::rownames_to_column("AChRs")
+plot.list_castes <- data.frame(plot.list_castes[1], stack(plot.list_castes[2:ncol(plot.list_castes)]))
+col_names_plot <- c("nAChRs", "tpm", "castes")
+colnames(plot.list_castes) <- col_names_plot
+# create a df of samples which I lated add up to the plot.list
+sample <- plot.list_castes$castes
+# Remove repeating pattern in castes
+plot.list_castes <- plot.list_castes %>%
+  mutate_all(~ gsub("abundance.|_1|_2|_3|_4|_5|_n1|_n2|_n3|_f1|_f2|_f3", "", .)) %>%
+  mutate_all(~ gsub("_virgin|_sugar_exposed|_mock_insemination", "", .))
+plot.list_castes$castes <- gsub("SRR.{6,7}_", "", plot.list_castes$castes)
+plot.list_castes$castes <- gsub("brain", "worker", plot.list_castes$castes)
+# Make TPMs numeric
+plot.list_castes$tpm <- as.numeric(plot.list_castes$tpm)
+# Add sample
+plot.list_castes$sample <- sample
+
+# Plot data
+ggplot(plot.list_castes, aes(x = castes, y = tpm, fill = nAChRs)) +
+  geom_bar(width = 0.4, stat = "identity", position = "fill") +
+  xlab("castes") +
+  ylab("Proportion of all nAChRs expression") +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 12, face = "plain"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12, face = "plain"),
+    strip.text = element_text(size = 10, face = "plain", hjust = 0.5),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10),
+    axis.text.x = element_text(size = 10, angle = 65, hjust = 1),
+    aspect.ratio = 1 / 1.5
+  )
+```
+```{r logit, message = FALSE}
+
+# Trying to replace alpha8 with aalpha8 (a8 as a reference, logit takes them alphabetically, didn't know how to do this otherwise)
+plot.list_castes <- plot.list_castes %>% mutate(nAChRs = ifelse(as.character(nAChRs) == "aalpha8", "alpha8", as.character(nAChRs)))
+
+# Run model
+logistic <- glm(tpm ~ nAChRs * castes, data = plot.list_castes, family = quasibinomial(link = "logit"))
+summary(logistic)
+
+# Turn glm results into a tidy tibble
+broom::tidy(logistic)
+# Look at the diagnostics
+broom::glance(logistic)
+# Return a tibble with information about data points
+broom::augment(logistic)
+```
+
+### Analisis of tissues
+# Studies:
+Datasets used:
+<br><b>9 worker (nurses and foragers) tissues</b>
+<br>-Jasper et al. 2015
+
+```{r filtering, message = FALSE, warning = FALSE}
+
+# Set variables for the model (tissues)
+condition <- samples_table_tissues %>%
+  dplyr::pull(tissue) %>%
+  unique() %>%
+  as.character()
+
+# Set the reference level: mitgut
+samples_table_tissues$condition <- relevel(
+  samples_table_tissues$tissue,
+  ref = "midgut"
+)
+
+# Create a DESeq object (for mitgut comparison)
+dds_tissues <- DESeq2::DESeqDataSetFromTximport(txi_kallisto_tissues,
+  colData = samples_table_tissues,
+  design = ~tissue
+)
+dds_tissues <- DESeq2::estimateSizeFactors(dds_tissues)
+dds_tissues <- DESeq2::counts(dds_tissues, normalized = TRUE)
+# Pre-filter the dataset
+dim(dds_tissues) # 15314    48
+keep <- rowSums(dds_tissues >= 10) >= 4
+dds_tissues <- dds_tissues[keep, ]
+dim(dds_tissues) # 1 2899    48
+
+
+# Extract genes of interest
+gene_list_tissues <- dds_tissues[gene_id, ]
+row.names(gene_list_tissues) <- names_AChRs
+```
+# Normalising TPMs
+
+```{r normalisation, message = FALSE}
+# Calculate sums of each collumn
+col_sum_tissues <- as.data.frame(gene_list_tissues) %>% dplyr::summarize_if(is.numeric, sum)
+
+ratios_tissues <- mapply("/", as.data.frame(gene_list_tissues), col_sum_tissues)
+row.names(ratios_tissues) <- names_AChRs
+```
+
+
+# Plotting the data
+
+```{r ratios visualisation, message = FALSE}
+# Transform data frame
+ratios_tissues <- as.data.frame(ratios_tissues)
+ratios_transf_tissues <- ratios_tissues[, order(names(ratios_tissues))]
+plot.list_tissues <- ratios_transf_tissues %>% tibble::rownames_to_column("AChRs")
+plot.list_tissues <- data.frame(plot.list_tissues[1], stack(plot.list_tissues[2:ncol(plot.list_tissues)]))
+colnames(plot.list_tissues) <- c("nAChRs", "tpm", "tissue")
+
+# Remove repeating pattern in tissue names
+plot.list_tissues <- plot.list_tissues %>% mutate_all(~ gsub("abundance.|_f1|_f2|_f3|_n1|_n2|_n3", "", .))
+plot.list_tissues$tissue <- gsub("SRR.{6,7}_", "", plot.list_tissues$tissue)
+plot.list_tissues$tissue <- gsub("thoracic_ganglia", "thoracic_ganglion", plot.list_tissues$tissue)
+# Make TPMs numeric
+plot.list_tissues$tpm <- as.numeric(plot.list_tissues$tpm)
+
+# Plot data
+ggplot(plot.list_tissues, aes(x = tissue, y = tpm, fill = nAChRs)) +
+  geom_bar(width = 0.7, stat = "identity", position = "fill") +
+  xlab("Tissue") +
+  ylab("Proportion of total nAChRs expression") +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 12, face = "plain"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12, face = "plain"),
+    strip.text = element_text(size = 10, face = "plain", hjust = 0.5),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10),
+    axis.text.x = element_text(size = 10, angle = 65, hjust = 1),
+    aspect.ratio = 1 / 1.5
+  )
+```
+```{r logit, message = FALSE}
+
+
+# Rearrange references
+replace_brain <- plot.list_tissues %>% mutate(tissue = ifelse(as.character(tissue) == "brain", "aabrain", as.character(tissue)))
+replace_a8 <- replace_brain %>% mutate(nAChRs = ifelse(as.character(nAChRs) == "alpha8", "aalpha8", as.character(nAChRs)))
+
+logistic <- glm(tpm ~ nAChRs * tissue, data = replace_a8, family = quasibinomial(link = "logit"))
+summary(logistic)
+# Turn glm results into a tidy tibble
+broom::tidy(logistic)
+# Look at the diagnostics
+broom::glance(logistic)
+# Return a tibble with information about data points
+broom::augment(logistic)
+```
