@@ -12,8 +12,8 @@ load_cran_pkgs <- function(pkg) {
 }
 
 cran_pkgs <- c(
-  "devtools", "XML", "BiocManager", "tidyverse", "RColorBrewer", "pheatmap", 
-  "styler", "renv", "here"
+  "devtools", "XML", "BiocManager", "tidyverse", "GGally", "ggtext",
+  "patchwork", "RColorBrewer",  "pheatmap", "styler", "renv", "here"
 )
 load_cran_pkgs(cran_pkgs)
 
