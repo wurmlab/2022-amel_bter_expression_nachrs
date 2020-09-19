@@ -1,5 +1,5 @@
 ---
-title: "Composition analysis of nAChR genes in _Bombus terrestris_ using `DESeq2`"
+title: "Composition analysis of nAChR subunits in _Bombus terrestris_"
 author: "Federico Lopez"
 date: '`r Sys.Date()`'
 output:
@@ -29,22 +29,19 @@ knitr::opts_chunk$set(
 
 # Load libraries
 ```{r}
-load_cran_pkgs <- function(pkg) {
+load_pkgs <- function(pkg) {
   sapply(pkg, require, character.only = TRUE)
 }
-cran_pkgs <- c(
-  "BiocManager", "tidyverse", "RColorBrewer", "pheatmap", "styler", "here"
-)
-load_cran_pkgs(cran_pkgs)
 
-load_bioconductor_pkgs <- function(pkg) {
-  sapply(pkg, require, character.only = TRUE)
-}
-bioconductor_pkgs <- c(
-  "biomaRt", "rhdf5", "tximport", "DESeq2", "edgeR", "csaw", "apeglm",
-  "vsn", "hexbin"
+cran_pkgs <- c(
+  "BiocManager", "tidyverse", "RColorBrewer", "styler", "here"
 )
-load_bioconductor_pkgs(bioconductor_pkgs)
+load_pkgs(cran_pkgs)
+
+bioconductor_pkgs <- c(
+  "biomaRt", "rhdf5", "tximport", "DESeq2"
+)
+load_pkgs(bioconductor_pkgs)
 ```
 
 # Set a custom ggplot theme
@@ -52,7 +49,6 @@ load_bioconductor_pkgs(bioconductor_pkgs)
 # Set a custom ggplot theme
 # devtools::install_github("cttobin/ggthemr")
 library(ggthemr)
-# Diverging
 custom_palette <- c(
   "#9E9E9E", "#59BDEF", "#EBCC2A", "#E1AF00", "#F27C8D", "#7B73D1", "#7B9FE0",
   "#F5CC7F", "#66C2A5", "#28A7B6", "#F2CB57", "#F2A057", "#F2845C"
@@ -66,6 +62,15 @@ custom_theme <- ggthemr::define_palette(
 ggthemr::ggthemr(custom_theme)
 ```
 
+# Create directory for results
+```{r}
+# here::here()
+# Create directory for results
+dir.create(here::here("results", "2020-07-28-gene_expression"),
+  recursive = TRUE
+)
+```
+
 # Associate transcripts to genes
 ```{r}
 # Remove all biomaRt cached files
@@ -75,15 +80,15 @@ ggthemr::ggthemr(custom_theme)
 # Retrieve Ensembl gene identifiers/names and create transcript-to-gene table
 biomaRt::listMarts(host = "metazoa.ensembl.org")
 
-metazoa_mart <- biomaRt::useMart(
+bter_mart <- biomaRt::useMart(
   biomart = "metazoa_mart",
   dataset = "bterrestris_eg_gene",
-  host = "metazoa.ensembl.org" # version 47
+  host = "metazoa.ensembl.org" # version 48
 )
 
-transcript_to_gene <- biomaRt::getBM(
+bter_tx2gene <- biomaRt::getBM(
   attributes = c("ensembl_transcript_id", "ensembl_gene_id"),
-  mart = metazoa_mart
+  mart = bter_mart
 )
 ```
 
@@ -96,82 +101,87 @@ nachrs <- c(
 )
 ```
 
-# Analysis of Colgan et al. (2019) data
-## Read `kallisto` results and table of samples and covariates
+# Analysis of castes
+## Read table of samples and covariates and `kallisto` results
 ```{r}
-# here::here()
-# Create directory for results
-dir.create(here::here(
-  "results", "2019-colgan_queen_worker_head", "2020-07-28-composition_analysis"
-), recursive = TRUE)
-
 # Set sample identifiers using the names of the kallisto output directories
-sample_ids <- dir(here::here(
-  "2019-colgan_queen_worker_head", "2020-07-14-kallisto"
+castes_ids <- dir(here::here(
+  "2019-colgan_queen_worker_head", "2020-07-14-kallisto", "results"
 ))
 
 # Read metadata table
-samples_table <- read.csv(
+castes_table <- read.csv(
   here::here(
-    "2019-colgan_queen_worker_head",
+    "bter_metadata",
     "2019-colgan_queen_worker_head_metadata.csv"
   ),
   header = TRUE,
   stringsAsFactors = TRUE
 )
 
-colnames(samples_table)
-
-samples_table$caste <- relevel(
-  samples_table$caste,
+castes_table$caste <- relevel(
+  castes_table$caste,
   ref = "worker"
 )
 
-input_files <- here::here(
-  "2019-colgan_queen_worker_head/2020-07-14-kallisto",
-  samples_table$sample,
+castes_files <- here::here(
+  "2019-colgan_queen_worker_head", "2020-07-14-kallisto", "results",
+  castes_table$sample,
   "abundance.h5"
 )
 
-names(input_files) <- samples_table$sample
+names(castes_files) <- castes_table$sample
 
 # Check that sample names match
-all(sample_ids %in% samples_table$sample)
+all(castes_ids %in% castes_table$sample)
 
 # Check that all files exist
-all(file.exists(input_files))
-# input_files
+all(file.exists(castes_files))
 ```
 
 ## Create a `DESeqDataSet` object
 ```{r}
 # Import kallisto quantifications
-txi <- tximport::tximport(input_files,
+castes_txi <- tximport::tximport(castes_files,
   type = "kallisto",
-  tx2gene = transcript_to_gene,
+  tx2gene = bter_tx2gene,
   txOut = FALSE
 )
 
 # Create a DESeqDataSet object
 # The design below includes the batch factors "block" and "room"
-dds <- DESeq2::DESeqDataSetFromTximport(txi,
-  colData = samples_table,
+castes_dds <- DESeq2::DESeqDataSetFromTximport(castes_txi,
+  colData = castes_table,
   design = ~ block + room + caste
 )
+
+# Choose the reference level for caste factor
+castes_dds$caste <- relevel(castes_dds$caste, ref = "worker")
 ```
 
-## Create stacked bar chart of nAChR subunit proportions
-Use normalised counts to calculate the expression proportions per sample.
+## Pre-filter the low-count genes
 ```{r}
 # Estimate the size factors
-dds <- DESeq2::estimateSizeFactors(dds)
-# Filtering
-keep <- rowSums(DESeq2::counts(dds) >= 10) >= 3
-dds <- dds[keep, ]
-norm_counts <- DESeq2::counts(dds, normalized = TRUE)
+castes_dds <- DESeq2::estimateSizeFactors(castes_dds)
+
+# Pre-filter the dataset
+dim(castes_dds)
+# 10661
+# At least 4 samples with a count of 10 or higher
+# The number of samples would be set to the smallest group size
+keep <- rowSums(DESeq2::counts(castes_dds) >= 10) >= 4
+castes_dds <- castes_dds[keep, ]
+dim(castes_dds)
+# 9139
+```
+
+## Use normalised counts to calculate the subunit proportions per sample
+```{r}
+# Normalise counts
+castes_counts <- DESeq2::counts(castes_dds, normalized = TRUE)
 
 # Examine counts
-# norm_counts %>%
+# castes_counts %>%
 #   as.data.frame() %>%
 #   tibble::rownames_to_column(var = "ens_gene") %>%
 #   dplyr::filter(ens_gene %in% nachrs)
@@ -179,11 +189,10 @@ norm_counts <- DESeq2::counts(dds, normalized = TRUE)
 # "LOC100645032 / alpha-4" (exons 1-4) was discarded in filtering step
 # Very low expression of "LOC100643274 / alpha6"
 
-nachrs_counts <- norm_counts %>%
+castes_counts_nachrs <- castes_counts %>%
   as.data.frame() %>%
   tibble::rownames_to_column(var = "ens_gene") %>%
   tidyr::gather(key = "sample", value = "norm_count", -ens_gene) %>%
-  dplyr::mutate_if(is.numeric, round, digits = 4) %>%
   dplyr::filter(ens_gene %in% nachrs) %>%
   dplyr::filter(ens_gene != "LOC100645032") %>%
   dplyr::group_by(sample) %>%
@@ -203,162 +212,122 @@ nachrs_counts <- norm_counts %>%
   dplyr::mutate(caste = case_when(
     grepl("worker", sample) ~ "worker",
     grepl("queen", sample) ~ "queen"
-  ))
-
-# Create stacked bar chart
-ggplot(nachrs_counts, aes(
-  x = caste, y = proportion,
-  fill = subunit, color = subunit
-)) +
-  geom_bar(position = "fill", stat = "identity", width = 0.4, alpha = 0.9) +
-  theme(
-    plot.title = element_text(hjust = 0.5, size = 12, face = "plain"),
-    plot.subtitle = element_text(hjust = 0.5, size = 12, face = "plain"),
-    strip.text = element_text(size = 10, face = "plain", hjust = 0.5),
-    axis.title = element_text(size = 12),
-    axis.text = element_text(size = 10),
-    axis.text.x = element_text(size = 10),
-    aspect.ratio = 2 / 1
-  ) +
-  labs(
-    x = "Caste",
-    y = "Proportion of total nAChR expression"
-  )
-
-ggsave(
-  filename = here::here(
-    "results", "2019-colgan_queen_worker_head",
-    "2020-07-28-composition_analysis",
-    "bter_colgan_proportions_stacked_bars.pdf"
-  ),
-  width = 6,
-  height = 6,
-  units = "in"
-)
+  )) %>%
+  dplyr::mutate_if(is.numeric, round, digits = 4)
 ```
 
-## Fit glm with proportional nAChR expression as the response variable
+## Fit glm with subunit proportion as the response variable
 ```{r}
 # Fit glm
-glmfit <- glm(
+castes_glmfit <- glm(
   formula = proportion ~ ens_gene + caste + ens_gene * caste,
-  family = quasibinomial(link = "logit"), data = nachrs_counts
+  family = quasibinomial(link = "logit"), data = castes_counts_nachrs
 )
 
 # Save summary
 sink(here::here(
-  "results", "2019-colgan_queen_worker_head",
-  "2020-07-28-composition_analysis",
-  "bter_colgan_proportions_glm_summary.txt"
+  "results", "2020-07-28-gene_expression",
+  "bter_castes_proportions_glm_summary.txt"
 ))
-print(summary(glmfit))
+print(summary(castes_glmfit))
 sink() # returns output to the console
 
 # Save glm results as a tidy tibble
-glm_tidy <- broom::tidy(glmfit) %>%
+castes_glmfit_tidy <- broom::tidy(castes_glmfit) %>%
   dplyr::mutate_if(is.numeric, round, digits = 4)
 
-write.csv(glm_tidy,
+write.csv(castes_glmfit_tidy,
   file = here::here(
-    "results", "2019-colgan_queen_worker_head",
-    "2020-07-28-composition_analysis",
-    "bter_colgan_proportions_glm_tidy.csv"
-  ),
-  row.names = FALSE
-)
-
-# Save tidy tibble with information about data points
-glm_augment <- broom::augment(glmfit) %>%
-  dplyr::mutate_if(is.numeric, round, digits = 4)
-
-write.csv(glm_augment,
-  file = here::here(
-    "results", "2019-colgan_queen_worker_head",
-    "2020-07-28-composition_analysis",
-    "bter_colgan_proportions_glm_augment.csv"
+    "results", "2020-07-28-gene_expression",
+    "bter_castes_proportions_glm_tidy.csv"
   ),
   row.names = FALSE
 )
 ```
 
-# Analysis of Harrison et al. (2015) data
-## Read `kallisto` results and table of samples and covariates
+# Analysis of life stages
+## Read `kallisto` results and table of samples and covariates.
 ```{r}
-# Create directory for results
-# here::here()
-dir.create(here::here(
-  "results", "2015-harrison_queen_worker_whole_body",
-  "2020-07-28-composition_analysis"
-), recursive = TRUE)
-
 # Set sample identifiers using the names of the kallisto output directories
-sample_ids <- dir(here::here(
-  "2015-harrison_queen_worker_whole_body",
+lifestages_ids <- dir(here::here(
+  "2015-harrison_queen_worker_whole_body", "results",
   "2020-07-14-kallisto"
 ))
 
 # Read metadata table
-samples_table <- read.csv(
+lifestages_table <- read.csv(
   here::here(
-    "2015-harrison_queen_worker_whole_body",
+    "bter_metadata",
     "2015-harrison_queen_worker_whole_body_metadata.csv"
   ),
   header = TRUE,
   stringsAsFactors = TRUE
 )
 
-colnames(samples_table)
-
-samples_table$condition <- relevel(
-  samples_table$condition,
+lifestages_table$condition <- relevel(
+  lifestages_table$condition,
   ref = "worker_larva"
 )
 
-input_files <- here::here(
+lifestages_files <- here::here(
   "2015-harrison_queen_worker_whole_body",
-  "2020-07-14-kallisto",
-  samples_table$sample,
+  "2020-07-14-kallisto", "results",
+  lifestages_table$sample,
   "abundance.h5"
 )
 
-names(input_files) <- samples_table$sample
+names(lifestages_files) <- lifestages_table$sample
 
 # Check that sample names match
-all(sample_ids %in% samples_table$sample)
+all(lifestages_ids %in% lifestages_table$sample)
 
 # Check that all files exist
-all(file.exists(input_files))
-# input_files
+all(file.exists(lifestages_files))
 ```
 
 ## Create a `DESeqDataSet` object
 ```{r}
 # Import kallisto quantifications
-txi <- tximport::tximport(input_files,
+lifestages_txi <- tximport::tximport(lifestages_files,
   type = "kallisto",
-  tx2gene = transcript_to_gene,
+  tx2gene = bter_tx2gene,
   txOut = FALSE
 )
 
 # Create a DESeqDataSet object
-dds <- DESeq2::DESeqDataSetFromTximport(txi,
-  colData = samples_table,
+lifestages_dds <- DESeq2::DESeqDataSetFromTximport(lifestages_txi,
+  colData = lifestages_table,
   design = ~condition
 )
+
+# Choose the reference level for condition factor
+lifestages_dds$condition <- relevel(lifestages_dds$condition, 
+  ref = "worker_larva")
 ```
 
-## Create stacked bar chart of nAChR subunit proportions
-Use normalised counts to calculate the expression proportions per sample.
+## Pre-filter the low-count genes
 ```{r}
 # Estimate the size factors
-dds <- DESeq2::estimateSizeFactors(dds)
-# Filtering
-keep <- rowSums(DESeq2::counts(dds) >= 10) >= 3
-dds <- dds[keep, ]
-norm_counts <- DESeq2::counts(dds, normalized = TRUE)
+lifestages_dds <- DESeq2::estimateSizeFactors(lifestages_dds)
+
+# Pre-filter the dataset
+dim(lifestages_dds)
+# 10661
+# At least 3 samples with a count of 10 or higher
+# The number of samples would be set to the smallest group size
+keep <- rowSums(DESeq2::counts(lifestages_dds) >= 10) >= 3
+lifestages_dds <- lifestages_dds[keep, ]
+dim(lifestages_dds)
+# 9892
+```
+
+## Use normalised counts to calculate the subunit proportions per sample
+```{r}
+# Normalise counts
+lifestages_counts <- DESeq2::counts(lifestages_dds, normalized = TRUE)
 
 # Examine counts
-# norm_counts %>%
+# lifestages_counts %>%
 #   as.data.frame() %>%
 #   tibble::rownames_to_column(var = "ens_gene") %>%
 #   dplyr::filter(ens_gene %in% nachrs)
@@ -366,11 +335,10 @@ norm_counts <- DESeq2::counts(dds, normalized = TRUE)
 # "LOC100645032 / alpha-4" (exons 1-4) was discarded in filtering step
 # Very low expression of "LOC100643274 / alpha6"
 
-nachrs_counts <- norm_counts %>%
+lifestages_counts_nachrs <- lifestages_counts %>%
   as.data.frame() %>%
   tibble::rownames_to_column(var = "ens_gene") %>%
   tidyr::gather(key = "sample", value = "norm_count", -ens_gene) %>%
-  dplyr::mutate_if(is.numeric, round, digits = 4) %>%
   dplyr::filter(ens_gene %in% nachrs) %>%
   dplyr::filter(ens_gene != "LOC100645032") %>%
   dplyr::group_by(sample) %>%
@@ -390,81 +358,36 @@ nachrs_counts <- norm_counts %>%
   dplyr::mutate(caste_stage = case_when(
     grepl("worker_larva", sample) ~ "worker_larva",
     grepl("worker_pupa", sample) ~ "worker_pupa",
-    grepl("worker_adult_undet", sample) ~ "worker_adult_undet",
-    grepl("worker_adult_repr", sample) ~ "worker_adult_repr",
+    grepl("worker_adult", sample) ~ "worker_adult",
     grepl("queen_adult", sample) ~ "queen_adult"
-  ))
-
-ggplot(nachrs_counts, aes(
-  x = caste_stage, y = proportion,
-  fill = subunit, color = subunit
-)) +
-  geom_bar(position = "fill", stat = "identity", width = 0.4, alpha = 0.9) +
-  theme(
-    plot.title = element_text(hjust = 0.5, size = 12, face = "plain"),
-    plot.subtitle = element_text(hjust = 0.5, size = 12, face = "plain"),
-    strip.text = element_text(size = 10, face = "plain", hjust = 0.5),
-    axis.title = element_text(size = 12),
-    axis.text = element_text(size = 10),
-    axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
-    aspect.ratio = 2 / 1
-  ) +
-  labs(
-    x = "Caste and life stage",
-    y = "Proportion of total nAChR expression"
-  )
-
-ggsave(
-  filename = here::here(
-    "results", "2015-harrison_queen_worker_whole_body",
-    "2020-07-28-composition_analysis",
-    "bter_harrison_proportions_stacked_bars.pdf"
-  ),
-  width = 6,
-  height = 6,
-  units = "in"
-)
+  )) %>%
+  dplyr::mutate_if(is.numeric, round, digits = 4)
 ```
 
-## Fit glm with proportional nAChR expression as the response variable
+## Fit glm with subunit proportion as the response variable
 ```{r}
 # Fit glm
-glmfit <- glm(
+lifestages_glmfit <- glm(
   formula = proportion ~ ens_gene + caste_stage + ens_gene * caste_stage,
-  family = quasibinomial(link = "logit"), data = nachrs_counts
+  family = quasibinomial(link = "logit"), data = lifestages_counts_nachrs
 )
 
 # Save summary
 sink(here::here(
-  "results", "2015-harrison_queen_worker_whole_body",
-  "2020-07-28-composition_analysis",
-  "bter_harrison_proportions_glm_summary.txt"
+  "results", "2020-07-28-gene_expression",
+  "bter_life_stages_proportions_glm_summary.txt"
 ))
-print(summary(glmfit))
+print(summary(lifestages_glmfit))
 sink() # returns output to the console
 
 # Save glm results as a tidy tibble
-glm_tidy <- broom::tidy(glmfit) %>%
+lifestages_glmfit_tidy <- broom::tidy(lifestages_glmfit) %>%
   dplyr::mutate_if(is.numeric, round, digits = 4)
 
-write.csv(glm_tidy,
+write.csv(lifestages_glmfit_tidy,
   file = here::here(
-    "results", "2015-harrison_queen_worker_whole_body",
-    "2020-07-28-composition_analysis",
-    "bter_harrison_proportions_glm_tidy.csv"
-  ),
-  row.names = FALSE
-)
-
-# Save tidy tibble with information about data points
-glm_augment <- broom::augment(glmfit) %>%
-  dplyr::mutate_if(is.numeric, round, digits = 4)
-
-write.csv(glm_augment,
-  file = here::here(
-    "results", "2015-harrison_queen_worker_whole_body",
-    "2020-07-28-composition_analysis",
-    "bter_harrison_proportions_glm_augment.csv"
+    "results", "2020-07-28-gene_expression",
+    "bter_life_stages_proportions_glm_tidy.csv"
   ),
   row.names = FALSE
 )
