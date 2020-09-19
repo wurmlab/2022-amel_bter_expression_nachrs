@@ -1,0 +1,272 @@
+---
+title: "Plot Figure 1"
+author: "Federico Lopez, Alicja Witwicka"
+date: '`r Sys.Date()`'
+output:
+  pdf_document: 
+    fig_caption: yes
+    toc: yes
+  github_document:
+    toc: yes
+  html_document:
+    toc: yes
+editor_options: 
+  chunk_output_type: console
+geometry: margin = 1cm
+---
+
+```{r setup, echo = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  cache.lazy = TRUE,
+  include = TRUE,
+  out.height = "\textheight",
+  out.width = "\textwidth"
+)
+```
+
+# Load libraries
+```{r}
+load_pkgs <- function(pkg) {
+  sapply(pkg, require, character.only = TRUE)
+}
+
+cran_pkgs <- c(
+  "BiocManager", "tidyverse", "patchwork", "ggtext", "styler", "here"
+)
+load_pkgs(cran_pkgs)
+
+bioconductor_pkgs <- c(
+  "biomaRt", "rhdf5", "tximport", "DESeq2"
+)
+load_pkgs(bioconductor_pkgs)
+```
+
+# Set a custom ggplot theme
+```{r}
+# Set a custom ggplot theme
+# devtools::install_github("cttobin/ggthemr")
+library(ggthemr)
+# Diverging
+custom_palette <- c(
+  "#9E9E9E", "#59BDEF", "#EBCC2A", "#E1AF00", "#F27C8D", "#7B73D1", "#7B9FE0",
+  "#F5CC7F", "#66C2A5", "#28A7B6", "#F2CB57", "#F2A057", "#F2845C"
+)
+# ggthemr::colour_plot(custom_palette)
+
+custom_theme <- ggthemr::define_palette(
+  swatch = custom_palette,
+  gradient = c(lower = "#59BDEF", upper = "#FF6B5A")
+)
+ggthemr::ggthemr(custom_theme)
+```
+
+```{r}
+# here::here()
+# Create directory for results
+dir.create(here::here("results", "2020-07-28-gene_expression"),
+  recursive = TRUE
+)
+```
+
+# Create all plots and combined them into a single figure
+# Bar chart of the means of sum of counts
+```{r}
+amel_bter_mean_nachrs <- read.csv(file = here::here(
+  "results", "2020-07-28-gene_expression",
+  "amel_bter_mean_sum_norm_counts_nachrs.csv"
+))
+
+# Apis mellifera
+amel_levels <- c(
+  "queen_brain", "worker_brain", "thoracic_ganglion", "antenna",
+  "hypopharyngeal_gland", "mandibular_gland", "muscle",
+  "midgut", "malpighian_tubule", "nasonov_gland"
+)
+
+# Bombus terrestris
+bter_levels <- c(
+  "queen_head", "worker_head", "queen_adult", "worker_adult",
+  "worker_larva", "worker_pupa"
+)
+
+order_levels <- c(amel_levels, bter_levels)
+
+# Bar chart using the mean of the sum of normalised counts
+amel_bter_means_barchart <- ggplot(amel_bter_mean_nachrs, aes(
+  x = factor(condition, levels = order_levels), y = mean_sum
+)) +
+  geom_col(
+    position = position_dodge2(preserve = "single"),
+    width = 0.5,
+    alpha = 0.9, color = "#C0C0C0", fill = "#C0C0C0"
+  ) +
+  geom_errorbar(aes(ymin = mean_sum - sd, ymax = mean_sum + sd),
+    color = "#00AFBB", width = 0.2, size = 0.6
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12, face = "plain"),
+    axis.title = element_text(size = 14),
+    legend.title = element_blank(),
+    strip.text = element_text(size = 14, face = "italic", hjust = 0.5),
+    axis.text = element_text(size = 12),
+    # axis.text.x = element_text(size = 12, angle = 45, hjust = 1),
+    axis.text.x = element_blank(),
+    legend.text = element_text(size = 12)
+  ) +
+  labs(
+    x = element_blank(),
+    y = "Mean nAChR expression"
+  ) +
+  ggforce::facet_row(~species, labeller = labeller(species = c(
+    amel = "Apis mellifera",
+    bter = "Bombus terrestris"
+  )), scales = "free", space = "free")
+
+# ggsave(amel_bter_means_barchart,
+#   filename = here::here(
+#     "results", "2020-07-28-gene_expression",
+#     "amel_bter_mean_sum_norm_counts_nachrs_barchart.pdf"
+#   ),
+#   width = 8,
+#   height = 4,
+#   units = "in"
+# )
+```
+
+# Stacked bar chart of the subunit expression proportions
+```{r}
+amel_bter_proportions <- read.csv(
+  file = here::here(
+    "results", "2020-07-28-gene_expression",
+    "amel_bter_proportions_nachrs.csv"
+  )
+)
+
+subunit_levels <- c(
+  "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6",
+  "alpha7", "alpha8", "alpha9", "beta1", "beta2"
+)
+
+amel_bter_proportions_barchart <- ggplot(amel_bter_proportions, aes(
+  x = factor(condition, levels = order_levels), y = proportion,
+  fill = factor(subunit, levels = subunit_levels),
+  color = factor(subunit, levels = subunit_levels)
+)) +
+  geom_bar(position = "fill", stat = "identity", width = 0.5, alpha = 0.9) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12, face = "plain"),
+    axis.title = element_text(size = 14),
+    legend.title = element_blank(),
+    # strip.text = element_text(size = 14, face = "italic", hjust = 0.5),
+    strip.text = element_blank(),
+    axis.text = element_text(size = 12),
+    axis.text.x = element_text(size = 12, angle = 45, hjust = 1),
+    legend.text = element_text(size = 12),
+    legend.key.height = unit(0.5, "cm"),
+    legend.key.width = unit(0.5, "cm")
+  ) +
+  labs(
+    x = element_blank(),
+    y = "Proportion of total \nnAChR expression"
+  ) +
+  ggforce::facet_row(~species, labeller = labeller(species = c(
+    amel = "Apis mellifera",
+    bter = "Bombus terrestris"
+  )), scales = "free", space = "free")
+
+# ggsave(amel_bter_proportions_barchart,
+#   filename = here::here(
+#     "results", "2020-07-28-gene_expression",
+#     "amel_bter_proportions_nachrs_barchart.pdf"
+#   ),
+#   width = 8,
+#   height = 4,
+#   units = "in"
+# )
+```
+
+# Scatterplot of the median subunit proportions
+```{r}
+median_proportions_wide <- read.csv(
+  file = here::here(
+    "results", "2020-07-28-gene_expression",
+    "amel_bter_brain_median_proportions_nachrs_wide.csv"
+  )
+)
+
+# Plot the proportions to compare each subunit between species
+# Match the colors assigned to subunits in other figures (Fig. 1)
+# Create vector of colors for subunits
+# Although included here, the colors of divergent subunits will not be applied
+subunit_breaks <- c(
+  "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6",
+  "alpha7", "alpha8", "alpha9", "beta1", "beta2"
+)
+
+subunit_colors <- c(
+  "#59BDEF", "#EBCC2A", "#E1AF00", "#F27C8D", "#7B73D1", "#7B9FE0",
+  "#F5CC7F", "#66C2A5", "#28A7B6", "#F2CB57", "#F2A057"
+)
+
+median_proportions_scatterplot <- ggplot(
+  median_proportions_wide,
+  aes(x = bter, y = amel)
+) +
+  geom_point(aes(color = subunit, fill = subunit, shape = subunit),
+    size = 4, stroke = 1
+  ) +
+  geom_smooth(
+    formula = y ~ x, color = "#838383", size = 0.6, method = "lm",
+    se = FALSE
+  ) +
+  geom_abline(colour = "grey", linetype = "dashed") +
+  scale_shape_manual(values = c(7:10, 21:25)) +
+  scale_color_manual(breaks = subunit_breaks, values = subunit_colors) +
+  scale_fill_manual(breaks = subunit_breaks, values = subunit_colors) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 16, face = "plain"),
+    strip.text = element_text(size = 12, face = "plain", hjust = 0.5),
+    axis.title = element_text(size = 14),
+    legend.title = element_blank(),
+    axis.text = element_text(size = 12),
+    axis.title.y = element_markdown(),
+    legend.text = element_text(size = 12)
+  ) +
+  labs(
+    # title = "Relationship between nAChR subunit proportions in brains",
+    x = expression(paste(
+      "Median expression proportion in ", italic("B. terrestris")
+    )),
+    y = "Median expression <br> proportion in <i>A. mellifera<i>"
+  ) +
+  facet_wrap(~caste, scales = "free", labeller = labeller(caste = c(
+    queen = "Queens",
+    worker = "Workers"
+  )))
+```
+
+# Combine plots into a single graphic
+```{r}
+# amel_bter_means_barchart /
+#   amel_bter_proportions_barchart /
+#   median_proportions_scatterplot
+
+figure_one <- amel_bter_means_barchart /
+  amel_bter_proportions_barchart /
+  median_proportions_scatterplot
+
+ggsave(figure_one,
+  filename = here::here(
+    "results", "2020-07-28-gene_expression",
+    "figure_one.pdf"
+  ),
+  width = 8.5,
+  height = 9.5,
+  units = "in"
+)
+```
