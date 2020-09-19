@@ -1,5 +1,5 @@
 ---
-title: "Differential expression of nAChR subunits in _Bombus terrestris_"
+title: "Differential expression analysis of nAChR subunits in _Bombus terrestris_"
 author: "Federico Lopez"
 date: '`r Sys.Date()`'
 output:
@@ -29,22 +29,19 @@ knitr::opts_chunk$set(
 
 # Load libraries
 ```{r}
-load_cran_pkgs <- function(pkg) {
+load_pkgs <- function(pkg) {
   sapply(pkg, require, character.only = TRUE)
 }
+
 cran_pkgs <- c(
   "BiocManager", "tidyverse", "RColorBrewer", "pheatmap", "styler", "here"
 )
-load_cran_pkgs(cran_pkgs)
+load_pkgs(cran_pkgs)
 
-load_bioconductor_pkgs <- function(pkg) {
-  sapply(pkg, require, character.only = TRUE)
-}
 bioconductor_pkgs <- c(
-  "biomaRt", "rhdf5", "tximport", "DESeq2", "edgeR", "csaw", "apeglm",
-  "vsn", "hexbin"
+  "biomaRt", "rhdf5", "tximport", "DESeq2"
 )
-load_bioconductor_pkgs(bioconductor_pkgs)
+load_pkgs(bioconductor_pkgs)
 ```
 
 # Set a custom ggplot theme
@@ -52,7 +49,6 @@ load_bioconductor_pkgs(bioconductor_pkgs)
 # Set a custom ggplot theme
 # devtools::install_github("cttobin/ggthemr")
 library(ggthemr)
-# Diverging
 custom_palette <- c(
   "#9E9E9E", "#59BDEF", "#EBCC2A", "#E1AF00", "#F27C8D", "#7B73D1", "#7B9FE0",
   "#F5CC7F", "#66C2A5", "#28A7B6", "#F2CB57", "#F2A057", "#F2845C"
@@ -66,6 +62,15 @@ custom_theme <- ggthemr::define_palette(
 ggthemr::ggthemr(custom_theme)
 ```
 
+# Create directory for results
+```{r}
+# here::here()
+# Create directory for results
+dir.create(here::here("results", "2020-07-28-gene_expression"),
+  recursive = TRUE
+)
+```
+
 # Associate transcripts to genes
 ```{r}
 # Remove all biomaRt cached files
@@ -75,141 +80,125 @@ ggthemr::ggthemr(custom_theme)
 # Retrieve Ensembl gene identifiers/names and create transcript-to-gene table
 biomaRt::listMarts(host = "metazoa.ensembl.org")
 
-metazoa_mart <- biomaRt::useMart(
+bter_mart <- biomaRt::useMart(
   biomart = "metazoa_mart",
   dataset = "bterrestris_eg_gene",
-  host = "metazoa.ensembl.org" # version 47
+  host = "metazoa.ensembl.org" # version 48
 )
 
-transcript_to_gene <- biomaRt::getBM(
+bter_tx2gene <- biomaRt::getBM(
   attributes = c("ensembl_transcript_id", "ensembl_gene_id"),
-  mart = metazoa_mart
+  mart = bter_mart
 )
 ```
 
 # Create vector of nAChR gene identifiers
 ```{r}
-nachrs <- c(
+bter_nachrs <- c(
   "LOC100643274", "LOC100643282", "LOC100645032", "LOC100646787",
   "LOC100647301", "LOC100647350", "LOC100647624", "LOC100648987",
   "LOC100649515", "LOC100649612", "LOC100649796"
 )
 ```
 
-# Analysis of Colgan et al. (2019) data
-## Read `kallisto` results and table of samples and covariates.
+# Analysis of castes
+## Read table of samples and covariates and `kallisto` results
 ```{r}
-# here::here()
-# Create directory for results
-dir.create(here::here(
-  "results", "2019-colgan_queen_worker_head", "2020-07-28-gene_expression"
-), recursive = TRUE)
-
 # Set sample identifiers using the names of the kallisto output directories
-sample_ids <- dir(here::here(
-  "2019-colgan_queen_worker_head", "2020-07-14-kallisto"
+castes_ids <- dir(here::here(
+  "2019-colgan_queen_worker_head", "2020-07-14-kallisto", "results"
 ))
 
 # Read metadata table
-samples_table <- read.csv(
+castes_table <- read.csv(
   here::here(
-    "2019-colgan_queen_worker_head",
+    "bter_metadata",
     "2019-colgan_queen_worker_head_metadata.csv"
   ),
   header = TRUE,
   stringsAsFactors = TRUE
 )
 
-colnames(samples_table)
-
-samples_table$caste <- relevel(
-  samples_table$caste,
+castes_table$caste <- relevel(
+  castes_table$caste,
   ref = "worker"
 )
 
-input_files <- here::here(
-  "2019-colgan_queen_worker_head/2020-07-14-kallisto",
-  samples_table$sample,
+castes_files <- here::here(
+  "2019-colgan_queen_worker_head", "2020-07-14-kallisto", "results",
+  castes_table$sample,
   "abundance.h5"
 )
 
-names(input_files) <- samples_table$sample
-input_files
+names(castes_files) <- castes_table$sample
 
 # Check that sample names match
-all(sample_ids %in% samples_table$sample)
+all(castes_ids %in% castes_table$sample)
 
 # Check that all files exist
-all(file.exists(input_files))
-# input_files
+all(file.exists(castes_files))
 ```
 
 ## Create a `DESeqDataSet` object
 ```{r}
 # Import kallisto quantifications
-txi <- tximport::tximport(input_files,
+castes_txi <- tximport::tximport(castes_files,
   type = "kallisto",
-  tx2gene = transcript_to_gene,
+  tx2gene = bter_tx2gene,
   txOut = FALSE
 )
 
 # Create a DESeqDataSet object
 # The design below includes the batch factors "block" and "room"
-dds <- DESeq2::DESeqDataSetFromTximport(txi,
-  colData = samples_table,
+castes_dds <- DESeq2::DESeqDataSetFromTximport(castes_txi,
+  colData = castes_table,
   design = ~ block + room + caste
 )
+
+# Choose the reference level for caste factor
+castes_dds$caste <- relevel(castes_dds$caste, ref = "worker")
 ```
 
-## Pre-filtering of low-count genes
+## Pre-filter the low-count genes
 ```{r}
-# Show table of sample information
-SummarizedExperiment::colData(dds)
-
-# Show number of replicates per condition
-with(SummarizedExperiment::colData(dds), table(caste))
-
 # Estimate the size factors
-dds <- DESeq2::estimateSizeFactors(dds)
-
-# Choose the reference level
-dds$caste <- relevel(dds$caste, ref = "worker")
+castes_dds <- DESeq2::estimateSizeFactors(castes_dds)
 
 # Pre-filter the dataset
-nrow(dds)
+dim(castes_dds)
 # 10661
 # At least 4 samples with a count of 10 or higher
 # The number of samples would be set to the smallest group size
-keep <- rowSums(DESeq2::counts(dds) >= 10) >= 4
-dds <- dds[keep, ]
-nrow(dds)
+keep <- rowSums(DESeq2::counts(castes_dds) >= 10) >= 4
+castes_dds <- castes_dds[keep, ]
+dim(castes_dds)
 # 9139
 ```
 
 ## Differential gene expression analysis
 ```{r}
 # Run DESeq2 pipeline
-dds <- DESeq2::DESeq(dds, test = "Wald", betaPrior = FALSE)
-DESeq2::resultsNames(dds)
+castes_dds <- DESeq2::DESeq(castes_dds, test = "Wald", betaPrior = FALSE)
+DESeq2::resultsNames(castes_dds)
 
 # Extract results
-res <- DESeq2::results(
-  dds,
+castes_res <- DESeq2::results(
+  castes_dds,
   contrast = c("caste", "queen", "worker"),
   lfcThreshold = 0,
   alpha = 0.1,
   pAdjustMethod = "BH"
 )
 
-DESeq2::summary(res)
+DESeq2::summary(castes_res)
 ```
 
-## Create table of `DESeq2` Wald test results
+## Create table of `DESeq2` Wald test results for castes
 ```{r}
-res_colgan <- res %>%
+castes_res <- castes_res %>%
   as.data.frame() %>%
   tibble::rownames_to_column(var = "ens_gene") %>%
-  dplyr::filter(ens_gene %in% nachrs) %>%
+  dplyr::filter(ens_gene %in% bter_nachrs) %>%
   dplyr::mutate(subunit = case_when(
     ens_gene == "LOC100647624" ~ "alpha1",
     ens_gene == "LOC100647301" ~ "alpha2",
@@ -230,131 +219,134 @@ res_colgan <- res %>%
   dplyr::mutate(species = "bter") %>%
   dplyr::mutate_if(is.numeric, round, digits = 4)
 
-write.csv(res_colgan,
+write.csv(castes_res,
   file = here::here(
-    "results", "2019-colgan_queen_worker_head",
-    "2020-07-28-gene_expression", "bter_colgan_deseq2_wald_res_nachrs.csv"
+    "results", "2020-07-28-gene_expression", 
+    "bter_castes_deseq2_wald_res_nachrs.csv"
   ),
   row.names = FALSE
 )
+
+table(castes_res$significance)
+# notsig    sig 
+#      4      6
+
+table(castes_res$subunit, castes_res$significance)
+#          notsig sig
+# alpha1        1   0
+# alpha2        0   1
+# alpha3        0   1
+# alpha4e5      1   0
+# alpha5        0   1
+# alpha6        0   1
+# alpha7        0   1
+# alpha8        0   1
+# beta1         1   0
+# beta2         1   0
 ```
 
-# Analysis of Harrison et al. (2015) data
+# Analysis of life stages
 ## Read `kallisto` results and table of samples and covariates.
 ```{r}
-# Create directory for results
-dir.create(here::here(
-  "results", "2015-harrison_queen_worker_whole_body",
-  "2020-07-28-gene_expression"
-), recursive = TRUE)
-
 # Set sample identifiers using the names of the kallisto output directories
-sample_ids <- dir(here::here(
-  "2015-harrison_queen_worker_whole_body",
+lifestages_ids <- dir(here::here(
+  "2015-harrison_queen_worker_whole_body", "results",
   "2020-07-14-kallisto"
 ))
 
 # Read metadata table
-samples_table <- read.csv(
+lifestages_table <- read.csv(
   here::here(
-    "2015-harrison_queen_worker_whole_body",
+    "bter_metadata",
     "2015-harrison_queen_worker_whole_body_metadata.csv"
   ),
   header = TRUE,
   stringsAsFactors = TRUE
 )
 
-colnames(samples_table)
-
-samples_table$condition <- relevel(
-  samples_table$condition,
+lifestages_table$condition <- relevel(
+  lifestages_table$condition,
   ref = "worker_larva"
 )
 
-input_files <- here::here(
+lifestages_files <- here::here(
   "2015-harrison_queen_worker_whole_body",
-  "2020-07-14-kallisto",
-  samples_table$sample,
+  "2020-07-14-kallisto", "results",
+  lifestages_table$sample,
   "abundance.h5"
 )
 
-names(input_files) <- samples_table$sample
-input_files
+names(lifestages_files) <- lifestages_table$sample
 
 # Check that sample names match
-all(sample_ids %in% samples_table$sample)
+all(lifestages_ids %in% lifestages_table$sample)
 
 # Check that all files exist
-all(file.exists(input_files))
-# input_files
+all(file.exists(lifestages_files))
 ```
 
 ## Create a `DESeqDataSet` object
 ```{r}
 # Import kallisto quantifications
-txi <- tximport::tximport(input_files,
+lifestages_txi <- tximport::tximport(lifestages_files,
   type = "kallisto",
-  tx2gene = transcript_to_gene,
+  tx2gene = bter_tx2gene,
   txOut = FALSE
 )
 
 # Create a DESeqDataSet object
-dds <- DESeq2::DESeqDataSetFromTximport(txi,
-  colData = samples_table,
+lifestages_dds <- DESeq2::DESeqDataSetFromTximport(lifestages_txi,
+  colData = lifestages_table,
   design = ~condition
 )
+
+# Choose the reference level for condition factor
+lifestages_dds$condition <- relevel(lifestages_dds$condition, 
+  ref = "worker_larva")
 ```
 
-## Pre-filtering of low-count genes
+## Pre-filter the low-count genes
 ```{r}
-# Show table of sample information
-colData(dds)
-
-# Show number of replicates per condition
-with(colData(dds), table(caste))
-
 # Estimate the size factors
-dds <- DESeq2::estimateSizeFactors(dds)
-
-# Choose the reference level
-dds$condition <- relevel(dds$condition, ref = "worker_larva")
+lifestages_dds <- DESeq2::estimateSizeFactors(lifestages_dds)
 
 # Pre-filter the dataset
-nrow(dds)
+dim(lifestages_dds)
 # 10661
 # At least 3 samples with a count of 10 or higher
 # The number of samples would be set to the smallest group size
-keep <- rowSums(DESeq2::counts(dds) >= 10) >= 3
-dds <- dds[keep, ]
-nrow(dds)
+keep <- rowSums(DESeq2::counts(lifestages_dds) >= 10) >= 3
+lifestages_dds <- lifestages_dds[keep, ]
+dim(lifestages_dds)
 # 9892
 ```
 
 ## Differential gene expression analysis
 ```{r}
 # Run DESeq2 pipeline
-dds <- DESeq2::DESeq(dds, test = "Wald", betaPrior = FALSE)
-DESeq2::resultsNames(dds)
+lifestages_dds <- DESeq2::DESeq(lifestages_dds, test = "Wald", 
+  betaPrior = FALSE)
+DESeq2::resultsNames(lifestages_dds)
 
-conditions <- samples_table %>%
+lifestages <- lifestages_table %>%
   dplyr::pull(condition) %>%
   unique() %>%
   as.character()
 
 # Create list of condition pairs
-contrasts <- combn(x = conditions, m = 2) %>%
+lifestages_contrasts <- combn(x = lifestages, m = 2) %>%
   t() %>%
   as.data.frame.array() %>%
   dplyr::rename(cond1 = V1, cond2 = V2) %>%
   dplyr::mutate(contrast = paste0(cond1, "_vs_", cond2))
-contrasts
 
-res_contrasts <- list()
-for (row in 1:nrow(contrasts)) {
-  cond1 <- as.character(contrasts[row, "cond1"])
-  cond2 <- as.character(contrasts[row, "cond2"])
-  res_contrasts[[row]] <- DESeq2::results(
-    dds,
+# Extract results
+lifestages_res <- list()
+for (row in 1:nrow(lifestages_contrasts)) {
+  cond1 <- as.character(lifestages_contrasts[row, "cond1"])
+  cond2 <- as.character(lifestages_contrasts[row, "cond2"])
+  lifestages_res[[row]] <- DESeq2::results(
+    lifestages_dds,
     contrast = c("condition", cond1, cond2),
     lfcThreshold = 0,
     alpha = 0.1,
@@ -362,14 +354,17 @@ for (row in 1:nrow(contrasts)) {
   )
 }
 
-names(res_contrasts) <- contrasts$contrast
+names(lifestages_res) <- lifestages_contrasts$contrast
+```
 
-res_nachrs <- list()
-for (contrast in contrasts$contrast) {
-  res_nachrs[[contrast]] <- res_contrasts[[contrast]] %>%
+## Create table of `DESeq2` Wald test results for life stages
+```{r}
+lifestages_res_df <- list()
+for (contrast in lifestages_contrasts$contrast) {
+  lifestages_res_df[[contrast]] <- lifestages_res[[contrast]] %>%
     as.data.frame() %>%
     tibble::rownames_to_column(var = "ens_gene") %>%
-    dplyr::filter(ens_gene %in% nachrs) %>%
+    dplyr::filter(ens_gene %in% bter_nachrs) %>%
     dplyr::mutate(subunit = case_when(
       ens_gene == "LOC100647624" ~ "alpha1",
       ens_gene == "LOC100647301" ~ "alpha2",
@@ -391,47 +386,76 @@ for (contrast in contrasts$contrast) {
     dplyr::mutate_if(is.numeric, round, digits = 4)
 }
 
-res_harrison <- dplyr::bind_rows(res_nachrs)
+lifestages_res_df <- dplyr::bind_rows(lifestages_res_df)
 
 # Write table of `DESeq2` Wald test results
-write.csv(res_harrison,
+write.csv(lifestages_res_df,
   file = here::here(
-    "results", "2015-harrison_queen_worker_whole_body",
-    "2020-07-28-gene_expression", "bter_harrison_deseq2_wald_res_nachrs.csv"
+    "results", "2020-07-28-gene_expression", 
+    "bter_life_stages_deseq2_wald_res_nachrs.csv"
   ),
   row.names = FALSE
 )
 
-table(res_harrison$significance)
+table(lifestages_res_df$significance)
 # not_sig     sig
-#     60      30
+#     40      20
 
-table(res_harrison$subunit, res_harrison$significance)
+table(lifestages_res_df$subunit, lifestages_res_df$significance)
 #          notsig sig
-# alpha1        7   3
-# alpha2        5   5
-# alpha3        8   2
-# alpha4e5      5   5
-# alpha5        7   3
-# alpha6        6   3
-# alpha7        8   2
-# alpha8       10   0
-# beta1         7   3
-# beta2         6   4
+# alpha1        4   2
+# alpha2        3   3
+# alpha3        4   2
+# alpha4e5      3   3
+# alpha5        4   2
+# alpha6        5   1
+# alpha7        5   1
+# alpha8        6   0
+# beta1         4   2
+# beta2         2   4
+```
+
+## Perform likelihood ratio test for testing all life stages at once
+```{r}
+lifestages_lrt <- DESeq2::DESeq(lifestages_dds, test = "LRT", reduced = ~1)
+lifestages_lrt_res <- DESeq2::results(lifestages_lrt)
+lifestages_lrt_res_df <- lifestages_lrt_res %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column(var = "ens_gene") %>%
+  dplyr::filter(ens_gene %in% bter_nachrs) %>%
+  dplyr::mutate(subunit = case_when(
+      ens_gene == "LOC100647624" ~ "alpha1",
+      ens_gene == "LOC100647301" ~ "alpha2",
+      ens_gene == "LOC100647350" ~ "alpha3",
+      ens_gene == "LOC100645032" ~ "alpha4",
+      ens_gene == "LOC100648987" ~ "alpha4e5",
+      ens_gene == "LOC100649515" ~ "alpha5",
+      ens_gene == "LOC100643274" ~ "alpha6",
+      ens_gene == "LOC100649796" ~ "alpha7",
+      ens_gene == "LOC100643282" ~ "alpha8",
+      ens_gene == "LOC100649612" ~ "beta1",
+      ens_gene == "LOC100646787" ~ "beta2"
+  )) %>%
+  dplyr::mutate(significance = ifelse(padj < 0.05, "sig", "notsig")) %>%
+  dplyr::mutate(species = "bter") %>%
+  dplyr::mutate_if(is.numeric, round, digits = 4)
+
+write.csv(lifestages_lrt_res_df,
+  file = here::here(
+    "results", "2020-07-28-gene_expression",
+    "bter_life_stages_deseq2_lrt_res_nachrs.csv"
+  ),
+  row.names = FALSE
+)
 ```
 
 # Combine results into a single data frame
 ```{r}
-# Create directory for results
-dir.create(here::here(
-  "results", "2020-07-28-gene_expression"
-), recursive = TRUE)
-
-bter_res_nachrs <- dplyr::bind_rows(res_colgan, res_harrison)
+bter_res_nachrs <- dplyr::bind_rows(castes_res, lifestages_res_df)
 
 write.csv(bter_res_nachrs,
   file = here::here(
-    "results", "2020-07-28-gene_expression", 
+    "results", "2020-07-28-gene_expression",
     "bter_deseq2_wald_res_nachrs.csv"
   ),
   row.names = FALSE
