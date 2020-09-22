@@ -718,10 +718,14 @@ tissues_vsd_nachrs <- assay(tissues_vsd) %>%
     ens_gene == "GB53428" ~ "beta2"
   ))
 
-# regex_remove <- c("^.+?_", "_\\w\\d$")
-# tissues_vsd_nachrs <- tissues_vsd_nachrs%>%
-#   dplyr::mutate(group = stringr::str_remove_all(sample,
-#     paste(regex_remove, collapse = "|")))
+regex_remove <- c("^.+?_", "_\\w\\d$")
+tissues_vsd_nachrs <- tissues_vsd_nachrs%>%
+  dplyr::mutate(group = stringr::str_remove_all(sample,
+    paste(regex_remove, collapse = "|"))) %>%
+  dplyr::mutate(
+    group = stringr::str_to_sentence(group)) %>%
+  dplyr::mutate(
+    group = stringr::str_replace(group, "_", " "))
 
 ggplot(tissues_vsd_nachrs, aes(
   x = sample, y = subunit, fill = vst_count
@@ -733,8 +737,11 @@ ggplot(tissues_vsd_nachrs, aes(
     legend.title = element_blank(),
     legend.text = element_text(size = 12),
     axis.title = element_text(size = 14),
-    axis.text = element_text(size = 12),
-    axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)
+    axis.text = element_text(size = 10),
+    # axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+    axis.text.x = element_blank(),
+    panel.spacing = unit(4, "mm"),
+    strip.text = element_text(size = 10)
   ) +
   labs(
     title = "Heatmap of transformed counts from honey bee tissues",
@@ -742,15 +749,17 @@ ggplot(tissues_vsd_nachrs, aes(
     y = expression(paste("Log"[2], " (VST) transformed count"))
   ) +
   scale_y_discrete(limits = rev(levels(factor(tissues_vsd_nachrs$subunit)))) +
-  scale_fill_gradientn(colours = c("#3B9AB2", "#78B7C5", "#EBCC2A"))
+  scale_fill_gradientn(colours = c("#3B9AB2", "#78B7C5", "#EBCC2A")) +
+  facet_wrap(~group, ncol = 10, scales = "free_x", 
+    labeller = label_wrap_gen(12))
 
 ggsave(
   filename = here::here(
     "results", "2020-07-28-gene_expression", "supplementary",
     "amel_tissues_vst_counts_heatmap.pdf"
   ),
-  width = 8,
-  height = 6,
+  width = 12,
+  height = 4,
   units = "in"
 )
 ```
