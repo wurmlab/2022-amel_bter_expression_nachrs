@@ -1,5 +1,5 @@
 ---
-title: "Composition analysis of nAChR genes in _Apis mellifera_ using `DESeq2`"
+title: "Composition analysis of nAChR genes in _Apis mellifera_"
 author: "Alicja Witwicka, Federico Lopez"
 date: '`r Sys.Date()`'
 output:
