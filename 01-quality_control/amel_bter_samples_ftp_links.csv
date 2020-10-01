@@ -1,4 +1,4 @@
-﻿species,study,caste,sample_name,ENA_ftp
+species,study,caste,sample_name,ENA_ftp
 amel,christen,worker,SRR7006997_sugar_exposed_worker,ftp.sra.ebi.ac.uk/vol1/fastq/SRR700/007/SRR7006997/SRR7006997.fastq.gz
 amel,christen,worker,SRR7006998_sugar_exposed_worker,ftp.sra.ebi.ac.uk/vol1/fastq/SRR700/008/SRR7006998/SRR7006998.fastq.gz
 amel,christen,worker,SRR7007000_sugar_exposed_worker,ftp.sra.ebi.ac.uk/vol1/fastq/SRR700/000/SRR7007000/SRR7007000.fastq.gz
@@ -94,12 +94,12 @@ amel,jasper,worker,SRR1255542_thoracic_ganglion_f2,ftp.sra.ebi.ac.uk/vol1/fastq/
 amel,jasper,worker,SRR1255542_thoracic_ganglion_f2,ftp.sra.ebi.ac.uk/vol1/fastq/SRR125/002/SRR1255542/SRR1255542_2.fastq.gz
 amel,jasper,worker,SRR1255543_thoracic_ganglion_f3,ftp.sra.ebi.ac.uk/vol1/fastq/SRR125/003/SRR1255543/SRR1255543_1.fastq.gz
 amel,jasper,worker,SRR1255543_thoracic_ganglion_f3,ftp.sra.ebi.ac.uk/vol1/fastq/SRR125/003/SRR1255543/SRR1255543_2.fastq.gz
-amel,jasper,worker,SRR1255544_thoracic_ganglia_n1,ftp.sra.ebi.ac.uk/vol1/fastq/SRR125/004/SRR1255544/SRR1255544_1.fastq.gz
-amel,jasper,worker,SRR1255544_thoracic_ganglia_n1,ftp.sra.ebi.ac.uk/vol1/fastq/SRR125/004/SRR1255544/SRR1255544_2.fastq.gz
-amel,jasper,worker,SRR1255545_thoracic_ganglia_n2,ftp.sra.ebi.ac.uk/vol1/fastq/SRR125/005/SRR1255545/SRR1255545_1.fastq.gz
-amel,jasper,worker,SRR1255545_thoracic_ganglia_n2,ftp.sra.ebi.ac.uk/vol1/fastq/SRR125/005/SRR1255545/SRR1255545_2.fastq.gz
-amel,jasper,worker,SRR1255546_thoracic_ganglia_n3,ftp.sra.ebi.ac.uk/vol1/fastq/SRR125/006/SRR1255546/SRR1255546_1.fastq.gz
-amel,jasper,worker,SRR1255546_thoracic_ganglia_n3,ftp.sra.ebi.ac.uk/vol1/fastq/SRR125/006/SRR1255546/SRR1255546_2.fastq.gz
+amel,jasper,worker,SRR1255544_thoracic_ganglion_n1,ftp.sra.ebi.ac.uk/vol1/fastq/SRR125/004/SRR1255544/SRR1255544_1.fastq.gz
+amel,jasper,worker,SRR1255544_thoracic_ganglion_n1,ftp.sra.ebi.ac.uk/vol1/fastq/SRR125/004/SRR1255544/SRR1255544_2.fastq.gz
+amel,jasper,worker,SRR1255545_thoracic_ganglion_n2,ftp.sra.ebi.ac.uk/vol1/fastq/SRR125/005/SRR1255545/SRR1255545_1.fastq.gz
+amel,jasper,worker,SRR1255545_thoracic_ganglion_n2,ftp.sra.ebi.ac.uk/vol1/fastq/SRR125/005/SRR1255545/SRR1255545_2.fastq.gz
+amel,jasper,worker,SRR1255546_thoracic_ganglion_n3,ftp.sra.ebi.ac.uk/vol1/fastq/SRR125/006/SRR1255546/SRR1255546_1.fastq.gz
+amel,jasper,worker,SRR1255546_thoracic_ganglion_n3,ftp.sra.ebi.ac.uk/vol1/fastq/SRR125/006/SRR1255546/SRR1255546_2.fastq.gz
 amel,jasper,worker,SRR935175_brain_n1,ftp.sra.ebi.ac.uk/vol1/fastq/SRR935/SRR935172/SRR935172_1.fastq.gz
 amel,jasper,worker,SRR935175_brain_n1,ftp.sra.ebi.ac.uk/vol1/fastq/SRR935/SRR935175/SRR935175_2.fastq.gz
 amel,jasper,worker,SRR935176_brain_n2,ftp.sra.ebi.ac.uk/vol1/fastq/SRR935/SRR935176/SRR935176_1.fastq.gz
