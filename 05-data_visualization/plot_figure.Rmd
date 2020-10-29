@@ -156,7 +156,7 @@ amel_bter_proportions_barchart <- ggplot(amel_bter_proportions, aes(
   fill = factor(subunit, levels = subunit_levels),
   color = factor(subunit, levels = subunit_levels)
 )) +
-  geom_bar(position = "fill", stat = "identity", width = 0.5, alpha = 0.9) +
+  geom_bar(position = "fill", stat = "identity", width = 0.5) +
   theme(
     plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
     plot.subtitle = element_text(hjust = 0.5, size = 12, face = "plain"),
@@ -224,7 +224,6 @@ median_proportions_scatterplot <- ggplot(
     formula = y ~ x, color = "#838383", size = 0.6, method = "lm",
     se = FALSE
   ) +
-  geom_abline(colour = "grey", linetype = "dashed") +
   scale_shape_manual(values = c(7:10, 21:25)) +
   scale_color_manual(breaks = subunit_breaks, values = subunit_colors) +
   scale_fill_manual(breaks = subunit_breaks, values = subunit_colors) +
