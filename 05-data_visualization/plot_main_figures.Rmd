@@ -1,0 +1,1861 @@
+---
+title: "Prepare data and plot all figures"
+author: "Federico Lopez-Osorio, Alicja Witwicka"
+date: '`r Sys.Date()`'
+output:
+  pdf_document: 
+    fig_caption: yes
+    toc: yes
+  github_document:
+    toc: yes
+  html_document:
+    toc: yes
+editor_options: 
+  chunk_output_type: console
+geometry: margin = 1cm
+---
+
+```{r setup, echo = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  cache.lazy = TRUE,
+  include = TRUE,
+  out.height = "\textheight",
+  out.width = "\textwidth"
+)
+```
+
+# Load libraries
+```{r}
+load_pkgs <- function(pkg) {
+  sapply(pkg, require, character.only = TRUE)
+}
+
+cran_pkgs <- c(
+  "BiocManager", "tidyverse", "GGally", "ggtext", "ggh4x", "ggforce",
+  "RColorBrewer", "styler", "patchwork", "here"
+)
+
+load_pkgs(cran_pkgs)
+
+bioconductor_pkgs <- c(
+  "biomaRt", "rhdf5", "tximport", "DESeq2", "vsn", "hexbin"
+)
+
+load_pkgs(bioconductor_pkgs)
+```
+
+# Set a custom `ggplot` theme
+```{r}
+# Set a custom ggplot theme
+# devtools::install_github("cttobin/ggthemr")
+library(ggthemr)
+
+custom_palette <- c(
+  "#9E9E9E", "#88CCEE", "#18913D", "#E9C83A", "#882255", "#CC6677",
+  "#332288", "#7B73D1", "#2857BA", "#28A7B6", "#F2CB57", "#F2845C"
+)
+
+# ggthemr::colour_plot(custom_palette)
+
+custom_theme <- ggthemr::define_palette(
+  swatch = custom_palette,
+  gradient = c(lower = "#E9C83A", upper = "#882255")
+)
+
+ggthemr::ggthemr(custom_theme)
+```
+
+```{r}
+# here::here()
+# Create directory for results
+dir.create(here::here("results", "2022-07-20-gene_expression", "supplementary"),
+  recursive = TRUE
+)
+```
+
+# Read tables of samples and covariates
+## _Apis mellifera_
+```{r}
+# Christen et al., 2018
+# Set sample identifiers using the names of the kallisto output directories
+ids_christen <- dir(here::here(
+  "results", "2018-christen_worker_brains", "2020-06-18-kallisto", "results"
+))
+
+# Read metadata table
+table_christen <- read.csv(
+  here::here(
+    "metadata_amel",
+    "2018-christen_worker_brains_metadata.csv"
+  ),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+
+files_christen <- here::here(
+  "results", "2018-christen_worker_brains", "2020-06-18-kallisto", "results",
+  table_christen$sample,
+  "abundance.h5"
+)
+
+names(files_christen) <- table_christen$sample
+
+# Check that sample names match
+all(ids_christen %in% table_christen$sample)
+
+# Check that all files exist
+all(file.exists(files_christen))
+
+# Jasper et al., 2015
+# Set sample identifiers using the names of the kallisto output directories
+ids_jasper <- dir(here::here(
+  "results", "2015-jasper_worker_tissues", "2020-06-16-kallisto", "results"
+))
+
+# Read metadata table
+table_jasper <- read.csv(
+  here::here(
+    "metadata_amel",
+    "2015-jasper_worker_tissues_metadata.csv"
+  ),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+
+files_jasper <- here::here(
+  "results", "2015-jasper_worker_tissues", "2020-06-16-kallisto", "results",
+  table_jasper$sample,
+  "abundance.h5"
+)
+
+names(files_jasper) <- table_jasper$sample
+
+# Check that sample names match
+all(ids_jasper %in% table_jasper$sample)
+
+# Check that all files exist
+all(file.exists(files_jasper))
+
+# Select the worker "brain" samples
+table_brain_jasper <- table_jasper %>%
+  dplyr::filter(tissue == "brain")
+
+files_brain_jasper <- files_jasper[grep("brain", files_jasper)]
+
+# Liberti et al., 2019
+# Set sample identifiers using the names of the kallisto output directories
+ids_liberti <- dir(here::here(
+  "results", "2019-liberti_queen_brains", "2020-06-18-kallisto", "results"
+))
+
+# Read metadata table
+table_liberti <- read.csv(
+  here::here(
+    "metadata_amel",
+    "2019-liberti_queen_brains_metadata.csv"
+  ),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+
+files_liberti <- here::here(
+  "results", "2019-liberti_queen_brains", "2020-06-18-kallisto", "results",
+  table_liberti$sample,
+  "abundance.h5"
+)
+
+names(files_liberti) <- table_liberti$sample
+
+# Check that sample names match
+all(ids_liberti %in% table_liberti$sample)
+
+# Check that all files exist
+all(file.exists(files_liberti))
+
+# Manfredini et al., 2015
+# Set sample identifiers using the names of the kallisto output directories
+ids_manfredini_amel <- dir(here::here(
+  "results", "2015-manfredini_queen_brains", "2020-06-18-kallisto", "results"
+))
+
+# Read metadata table
+table_manfredini_amel <- read.csv(
+  here::here(
+    "metadata_amel",
+    "2015-manfredini_queen_brains_metadata.csv"
+  ),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+
+files_manfredini_amel <- here::here(
+  "results", "2015-manfredini_queen_brains", "2020-06-18-kallisto", "results",
+  table_manfredini_amel$sample,
+  "abundance.h5"
+)
+
+names(files_manfredini_amel) <- table_manfredini_amel$sample
+
+# Check that sample names match
+all(ids_manfredini_amel %in% table_manfredini_amel$sample)
+
+# Check that all files exist
+all(file.exists(files_manfredini_amel))
+```
+
+## _Bombus terrestris_
+```{r}
+# Colgan et al., 2019
+# Set sample identifiers using the names of the kallisto output directories
+ids_colgan <- dir(here::here(
+  "results", "2019-colgan_queen_worker_head", "2020-07-14-kallisto", "results"
+))
+
+# Read metadata table
+table_colgan <- read.csv(
+  here::here(
+    "metadata_bter",
+    "2019-colgan_queen_worker_head_metadata.csv"
+  ),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+
+files_colgan <- here::here(
+  "results", "2019-colgan_queen_worker_head", "2020-07-14-kallisto", "results",
+  table_colgan$sample,
+  "abundance.h5"
+)
+
+names(files_colgan) <- table_colgan$sample
+
+# Check that sample names match
+all(ids_colgan %in% table_colgan$sample)
+
+# Check that all files exist
+all(file.exists(files_colgan))
+
+# Harrison et al., 2015
+# Set sample identifiers using the names of the kallisto output directories
+ids_harrison <- dir(here::here(
+  "results", "2015-harrison_queen_worker_whole_body",
+  "2020-07-14-kallisto", "results"
+))
+
+# Read metadata table
+table_harrison <- read.csv(
+  here::here(
+    "metadata_bter",
+    "2015-harrison_queen_worker_whole_body_metadata.csv"
+  ),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+
+files_harrison <- here::here(
+  "results", "2015-harrison_queen_worker_whole_body",
+  "2020-07-14-kallisto", "results",
+  table_harrison$sample,
+  "abundance.h5"
+)
+
+names(files_harrison) <- table_harrison$sample
+
+# Check that sample names match
+all(ids_harrison %in% table_harrison$sample)
+
+# Check that all files exist
+all(file.exists(files_harrison))
+```
+
+# Combine input files and metadata per species
+```{r}
+# Apis mellifera
+files_amel <- c(
+  files_christen, files_jasper, files_liberti, files_manfredini_amel
+)
+
+table_amel <- dplyr::bind_rows(
+  table_christen, table_jasper, table_liberti, table_manfredini_amel
+) %>%
+  dplyr::select(sample, caste, tissue, study, species)
+
+# Bombus terrestris
+files_bter <- c(files_colgan, files_harrison)
+
+table_bter <- dplyr::bind_rows(table_colgan, table_harrison) %>%
+  dplyr::select(sample, caste, tissue, stage, study, species)
+```
+
+# Associate transcripts to genes
+```{r}
+# Apis mellifera
+mart_amel <- biomaRt::useMart(
+  biomart = "metazoa_mart",
+  dataset = "amellifera_eg_gene",
+  host = "sep2019-metazoa.ensembl.org" # version 45
+)
+
+tx2gene_amel <- biomaRt::getBM(
+  attributes = c("ensembl_transcript_id", "ensembl_gene_id"),
+  mart = mart_amel
+)
+
+# Bombus terrestris
+mart_bter <- biomaRt::useMart(
+  biomart = "metazoa_mart",
+  dataset = "bterrestris_eg_gene",
+  host = "sep2019-metazoa.ensembl.org" # version 45
+)
+
+tx2gene_bter <- biomaRt::getBM(
+  attributes = c("ensembl_transcript_id", "ensembl_gene_id"),
+  mart = mart_bter
+)
+```
+
+# Create vectors of nAChR gene identifiers
+```{r}
+nachrs_amel <- c(
+  "GB42850", "GB42644", "GB47845", "GB43275", "GB43064", "GB43416",
+  "GB53053", "GB40923", "GB53427", "GB53055", "GB53428"
+)
+
+nachrs_bter <- c(
+  "LOC100643274", "LOC100643282", "LOC100645032", "LOC100646787",
+  "LOC100647301", "LOC100647350", "LOC100647624", "LOC100648987",
+  "LOC100649515", "LOC100649612", "LOC100649796"
+)
+```
+
+# Figure 1. Bar charts of count percentages and subunit ratios
+## Import `kallisto` quantifications using `tximport`
+```{r}
+# Apis mellifera
+txi_amel <- tximport::tximport(files_amel,
+  type = "kallisto",
+  tx2gene = tx2gene_amel,
+  txOut = FALSE
+)
+
+# Bombus terrestris
+txi_bter <- tximport::tximport(files_bter,
+  type = "kallisto",
+  tx2gene = tx2gene_bter,
+  txOut = FALSE
+)
+```
+
+## Create `DESeqDataSet` objects
+```{r}
+# Apis mellifera
+dds_amel <- DESeq2::DESeqDataSetFromTximport(txi_amel,
+  colData = table_amel,
+  design = ~ caste + tissue
+)
+
+# Estimate the size factors
+dds_amel <- DESeq2::estimateSizeFactors(dds_amel)
+# Filtering
+keep_amel <- rowSums(DESeq2::counts(dds_amel) >= 10) >= 3
+dds_amel <- dds_amel[keep_amel, ]
+
+# Bombus terrestris
+dds_bter <- DESeq2::DESeqDataSetFromTximport(txi_bter,
+  colData = table_bter,
+  design = ~ caste + tissue + stage
+)
+
+# Estimate the size factors
+dds_bter <- DESeq2::estimateSizeFactors(dds_bter)
+# Filtering
+keep_bter <- rowSums(DESeq2::counts(dds_bter) >= 10) >= 3
+dds_bter <- dds_bter[keep_bter, ]
+```
+
+## Normalise the counts using `DESeq2`'s median-of-ratios method
+```{r}
+counts_amel <- DESeq2::counts(dds_amel, normalized = TRUE)
+counts_bter <- DESeq2::counts(dds_bter, normalized = TRUE)
+```
+
+## Create data frames of normalised counts 
+## _Apis mellifera_
+```{r}
+add_factors_nachrs_amel <- function(df) {
+  df <- df %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column(var = "ens_gene") %>%
+    tidyr::gather(key = "sample", value = "norm_count", -ens_gene) %>%
+    dplyr::mutate_if(is.numeric, round, digits = 4) %>%
+    dplyr::filter(ens_gene %in% nachrs_amel) %>%
+    dplyr::mutate(subunit = case_when(
+      ens_gene == "GB42850" ~ "alpha1",
+      ens_gene == "GB42644" ~ "alpha2",
+      ens_gene == "GB47845" ~ "alpha3",
+      ens_gene == "GB43275" ~ "alpha4",
+      ens_gene == "GB43064" ~ "alpha5",
+      ens_gene == "GB43416" ~ "alpha6",
+      ens_gene == "GB53053" ~ "alpha7",
+      ens_gene == "GB40923" ~ "alpha8",
+      ens_gene == "GB53427" ~ "alpha9",
+      ens_gene == "GB53055" ~ "beta1",
+      ens_gene == "GB53428" ~ "beta2"
+    )) %>%
+    dplyr::mutate(study = case_when(
+      stringr::str_detect(
+        sample, paste(table_christen$sample, collapse = "|")
+      ) ~ "christen",
+      stringr::str_detect(
+        sample, paste(table_jasper$sample, collapse = "|")
+      ) ~ "jasper",
+      stringr::str_detect(
+        sample, paste(table_liberti$sample, collapse = "|")
+      ) ~ "liberti",
+      stringr::str_detect(
+        sample, paste(table_manfredini_amel$sample, collapse = "|")
+      ) ~ "manfredini"
+    )) %>%
+    dplyr::mutate(tissue = case_when(
+      stringr::str_detect(
+        sample, paste(table_christen$sample, collapse = "|")
+      ) ~ "brain",
+      grepl("brain", sample) ~ "brain",
+      grepl("antenna", sample) ~ "antenna",
+      grepl("midgut", sample) ~ "midgut",
+      grepl("hypopharyngeal_gland", sample) ~ "hypopharyngeal_gland",
+      grepl("malpighian_tubule", sample) ~ "malpighian_tubule",
+      grepl("mandibular_gland", sample) ~ "mandibular_gland",
+      grepl("muscle", sample) ~ "muscle",
+      grepl("nasonov_gland", sample) ~ "nasonov_gland",
+      grepl("thoracic_ganglion", sample) ~ "thoracic_ganglion",
+      stringr::str_detect(
+        sample, paste(table_liberti$sample, collapse = "|")
+      ) ~ "brain",
+      stringr::str_detect(
+        sample, paste(table_manfredini_amel$sample, collapse = "|")
+      ) ~ "brain"
+    )) %>%
+    dplyr::mutate(caste = case_when(
+      stringr::str_detect(
+        sample, paste(table_christen$sample, collapse = "|")
+      ) ~ "worker",
+      stringr::str_detect(
+        sample, paste(table_jasper$sample, collapse = "|")
+      ) ~ "worker",
+      stringr::str_detect(
+        sample, paste(table_liberti$sample, collapse = "|")
+      ) ~ "queen",
+      stringr::str_detect(
+        sample, paste(table_manfredini_amel$sample, collapse = "|")
+      ) ~ "queen"
+    )) %>%
+    dplyr::mutate(stage = "adult") %>%
+    dplyr::mutate(species = "amel")
+  return(df)
+}
+
+counts_nachrs_amel <- add_factors_nachrs_amel(counts_amel)
+```
+
+## _Bombus terrestris_
+```{r}
+# "LOC100645032" has low expression
+counts_nachrs_bter <- counts_bter %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column(var = "ens_gene") %>%
+  tidyr::gather(key = "sample", value = "norm_count", -ens_gene) %>%
+  dplyr::mutate_if(is.numeric, round, digits = 4) %>%
+  dplyr::filter(ens_gene %in% nachrs_bter) %>%
+  dplyr::filter(ens_gene != "LOC100645032") %>%
+  dplyr::mutate(subunit = case_when(
+    ens_gene == "LOC100647624" ~ "alpha1",
+    ens_gene == "LOC100647301" ~ "alpha2",
+    ens_gene == "LOC100647350" ~ "alpha3",
+    ens_gene == "LOC100648987" ~ "alpha4e5",
+    ens_gene == "LOC100649515" ~ "alpha5",
+    ens_gene == "LOC100643274" ~ "alpha6",
+    ens_gene == "LOC100649796" ~ "alpha7",
+    ens_gene == "LOC100643282" ~ "alpha8",
+    ens_gene == "LOC100649612" ~ "beta1",
+    ens_gene == "LOC100646787" ~ "beta2"
+  )) %>%
+  dplyr::mutate(study = case_when(
+    stringr::str_detect(
+      sample, paste(table_colgan$sample, collapse = "|")
+    ) ~ "colgan",
+    stringr::str_detect(
+      sample, paste(table_harrison$sample, collapse = "|")
+    ) ~ "harrison"
+  )) %>%
+  dplyr::mutate(tissue = case_when(
+    stringr::str_detect(
+      sample, paste(table_colgan$sample, collapse = "|")
+    ) ~ "head",
+    stringr::str_detect(
+      sample, paste(table_harrison$sample, collapse = "|")
+    ) ~ "whole_body"
+  )) %>%
+  dplyr::mutate(caste = case_when(
+    grepl("queen", sample) ~ "queen",
+    grepl("worker", sample) ~ "worker"
+  )) %>%
+  dplyr::mutate(stage = case_when(
+    stringr::str_detect(
+      sample, paste(table_colgan$sample, collapse = "|")
+    ) ~ "adult",
+    grepl("adult", sample) ~ "adult",
+    grepl("larva", sample) ~ "larva",
+    grepl("pupa", sample) ~ "pupa"
+  )) %>%
+  dplyr::mutate(species = "bter")
+```
+
+## Combine data frames of normalised counts
+```{r}
+counts_nachrs_amel_bter <- dplyr::bind_rows(
+  counts_nachrs_amel, counts_nachrs_bter
+)
+
+# Recode subunit "alpha4" in Bombus terrestris
+counts_nachrs_amel_bter$subunit <- dplyr::recode(
+  counts_nachrs_amel_bter$subunit,
+  "alpha4e5" = "alpha4"
+)
+```
+
+## Means of sum of counts
+```{r}
+# For each sample, sum the normalised counts of all subunits
+sum_nachrs_amel_bter <- counts_nachrs_amel_bter %>%
+  dplyr::group_by(species, study, tissue, stage, caste, sample) %>%
+  dplyr::summarise(count_sum = sum(norm_count)) %>%
+  dplyr::mutate_if(is.numeric, round, digits = 4)
+
+# For each condition, calculate the mean of the sum of counts and SD
+mean_nachrs_amel_bter <- sum_nachrs_amel_bter %>%
+  dplyr::group_by(species, tissue, stage, caste) %>%
+  dplyr::summarise(mean_sum = mean(count_sum), sd = sd(count_sum)) %>%
+  dplyr::mutate_if(is.numeric, round, digits = 4)
+
+# Create a function to add a new "condition" variable for plotting
+add_condition <- function(df) {
+  # Create a "condition" factor that combines caste, tissue and life stage
+  df <- tidyr::unite(df,
+    col = "condition", c("caste", "tissue", "stage"),
+    remove = FALSE
+  ) %>%
+    dplyr::mutate(
+      condition = ifelse(
+        species == "amel" & !tissue %in% c("brain", "head", "whole_body"),
+        gsub(c("worker_|_adult"), "", condition), condition
+      )
+    ) %>%
+    dplyr::mutate(
+      condition = ifelse(species == "amel" & tissue %in% c("brain", "head"),
+        gsub(c("_adult"), "", condition), condition
+      )
+    ) %>%
+    dplyr::mutate(
+      condition = ifelse(species == "bter" & tissue == "head",
+        gsub(c("_adult"), "", condition), condition
+      )
+    ) %>%
+    dplyr::mutate(
+      condition = ifelse(species %in% c("amel", "bter"),
+        gsub(c("whole_body_"), "", condition), condition
+      )
+    ) %>%
+    dplyr::relocate(condition, .after = last_col())
+  return(df)
+}
+
+mean_nachrs_amel_bter <- add_condition(mean_nachrs_amel_bter)
+```
+
+## Subunit expression proportions
+```{r}
+proportions_amel_bter <- counts_nachrs_amel_bter %>%
+  dplyr::group_by(species, study, caste, tissue, stage, sample) %>%
+  dplyr::mutate(proportion = norm_count / sum(norm_count)) %>%
+  dplyr::mutate_if(is.numeric, round, digits = 4)
+
+proportions_amel_bter <- add_condition(proportions_amel_bter)
+```
+
+## Compose Figure 1
+## Bar chart of total expression of subunits
+```{r}
+# Set the order of factor levels
+levels_order <- c(
+  "queen_brain", "worker_brain", "queen_head", "worker_head",
+  "thoracic_ganglion", "antenna", "hypopharyngeal_gland", "mandibular_gland",
+  "muscle", "midgut", "malpighian_tubule", "nasonov_gland",
+  "queen_adult", "worker_adult",
+  "queen_pupa", "worker_pupa", "queen_larva", "worker_larva"
+)
+
+# Bar chart using the mean of the sum of normalised counts
+means_barchart_amel_bter <- ggplot(mean_nachrs_amel_bter, aes(
+  x = factor(condition, levels = levels_order), y = mean_sum
+)) +
+  geom_col(
+    position = position_dodge2(preserve = "single"),
+    width = 0.5,
+    alpha = 0.9, color = "#C0C0C0", fill = "#C0C0C0"
+  ) +
+  geom_errorbar(aes(ymin = mean_sum - sd, ymax = mean_sum + sd),
+    color = "#00AFBB", width = 0.2, size = 0.6
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12, face = "plain"),
+    axis.title = element_text(size = 14),
+    legend.title = element_blank(),
+    strip.text = element_text(size = 14, face = "italic", hjust = 0.5),
+    axis.text = element_text(size = 12),
+    axis.text.x = element_text(size = 12, angle = 90, vjust = 0.5, hjust = 1),
+    legend.text = element_text(size = 12)
+  ) +
+  labs(
+    x = element_blank(),
+    y = "Total nAChR \nexpression"
+  ) +
+  ggforce::facet_row(~species, labeller = labeller(species = c(
+    amel = "Apis mellifera",
+    bter = "Bombus terrestris"
+  )), scales = "free", space = "free") +
+  scale_x_discrete(label = function(x) {
+    stringr::str_to_sentence(x) %>% stringr::str_replace("_", " ")
+  })
+
+means_barchart_amel_bter
+
+## Stacked bar chart of the subunit expression proportions
+levels_subunits <- c(
+  "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6",
+  "alpha7", "alpha8", "alpha9", "beta1", "beta2"
+)
+
+proportions_barchart_amel_bter <- ggplot(proportions_amel_bter, aes(
+  x = factor(condition, levels = levels_order), y = proportion,
+  fill = factor(subunit, levels = levels_subunits),
+  color = factor(subunit, levels = levels_subunits)
+)) +
+  geom_bar(position = "fill", stat = "identity", width = 0.5) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12, face = "plain"),
+    axis.title = element_text(size = 14),
+    legend.title = element_blank(),
+    strip.text = element_blank(),
+    axis.text = element_text(size = 12),
+    axis.text.x = element_blank(),
+    legend.text = element_text(size = 12),
+    legend.key.height = unit(0.5, "cm"),
+    legend.key.width = unit(0.5, "cm")
+  ) +
+  labs(
+    x = element_blank(),
+    y = "Proportion of total \nnAChR expression"
+  ) +
+  ggforce::facet_row(~species, labeller = labeller(species = c(
+    amel = "Apis mellifera",
+    bter = "Bombus terrestris"
+  )), scales = "free", space = "free")
+
+proportions_barchart_amel_bter
+
+# Combine bar charts
+figure_one <- means_barchart_amel_bter / proportions_barchart_amel_bter
+
+figure_one
+
+ggsave(figure_one,
+  filename = here::here(
+    "results", "2022-07-20-gene_expression", "figure_one.pdf"
+  ),
+  width = 12,
+  height = 8,
+  units = "in",
+  dpi = "retina"
+)
+```
+
+# Set a different color palette for the remaining figures
+```{r}
+# Set a custom ggplot theme
+library(ggthemr)
+
+custom_palette <- c(
+  "#9E9E9E", "#59BDEF", "#EBCC2A", "#E1AF00", "#F27C8D", "#7B73D1", "#7B9FE0",
+  "#F5CC7F", "#66C2A5", "#28A7B6", "#F2CB57", "#F2A057", "#F2845C"
+)
+
+# ggthemr::colour_plot(custom_palette)
+
+custom_theme <- ggthemr::define_palette(
+  swatch = custom_palette,
+  gradient = c(lower = "#59BDEF", upper = "#FF6B5A")
+)
+
+ggthemr::ggthemr(custom_theme)
+```
+
+# Figure 2. Principal component analysis plots
+## _Apis mellifera_ tissues
+```{r}
+# Combine input files and information about the samples
+# Tissues
+files_tissues_amel <- files_jasper
+table_tissues_amel <- table_jasper
+
+# Import `kallisto` quantifications using `tximport`
+txi_tissues_amel <- tximport::tximport(
+  files_tissues_amel,
+  type = "kallisto",
+  tx2gene = tx2gene_amel,
+  txOut = FALSE
+)
+
+dds_tissues_amel <- DESeq2::DESeqDataSetFromTximport(txi_tissues_amel,
+  colData = table_tissues_amel,
+  design = ~tissue
+)
+
+# Choose the reference level for tissue factor
+dds_tissues_amel$tissue <- relevel(dds_tissues_amel$tissue, ref = "midgut")
+
+# Estimate the size factors
+dds_tissues_amel <- DESeq2::estimateSizeFactors(dds_tissues_amel)
+
+# Pre-filter the dataset
+dim(dds_tissues_amel)
+# 15314    48
+keep <- rowSums(DESeq2::counts(dds_tissues_amel) >= 10) >= 3
+dds_tissues_amel <- dds_tissues_amel[keep, ]
+dim(dds_tissues_amel)
+# 13114    48
+
+# Apply the variance stabilising transformation
+# The transformed data are on the log2 scale
+vsd_tissues_amel <- DESeq2::vst(dds_tissues_amel, blind = FALSE)
+
+pca_data_tissues_amel <- DESeq2::plotPCA(vsd_tissues_amel,
+  intgroup = "tissue",
+  ntop = 500, returnData = TRUE
+)
+
+# Extract percentages of variance explained from list
+pca_var_tissues_amel <- round(100 * attr(pca_data_tissues_amel, "percentVar"))
+
+# Convert from list to data frame, add factor columns
+pca_data_tissues_amel <- pca_data_tissues_amel %>%
+  dplyr::mutate(life_stage = "adult") %>%
+  dplyr::mutate(caste = "worker") %>%
+  dplyr::mutate(study = "jasper") %>%
+  dplyr::mutate(species = "amel") %>%
+  dplyr::select(-group) %>%
+  dplyr::relocate(PC1, PC2, name, life_stage, tissue, caste, study, species)
+```
+
+## _Apis mellifera_ castes
+```{r}
+# Combine input files and information about the samples
+# Castes
+files_castes_amel <- c(
+  files_christen, files_brain_jasper, files_liberti, files_manfredini_amel
+)
+
+table_castes_amel <- dplyr::bind_rows(
+  table_christen, table_brain_jasper, table_liberti, table_manfredini_amel
+) %>%
+  dplyr::select(sample, caste, tissue, study, species)
+
+# Import `kallisto` quantifications using `tximport`
+txi_castes_amel <- tximport::tximport(
+  files_castes_amel,
+  type = "kallisto",
+  tx2gene = tx2gene_amel,
+  txOut = FALSE
+)
+
+# Create a DESeqDataSet object
+dds_castes_amel <- DESeq2::DESeqDataSetFromTximport(txi_castes_amel,
+  colData = table_castes_amel,
+  design = ~caste
+)
+
+# Choose the reference level for caste factor
+dds_castes_amel$caste <- relevel(dds_castes_amel$caste, ref = "worker")
+
+# Pre-filter the low-count genes
+dim(dds_castes_amel)
+# 15314    18
+keep <- rowSums(DESeq2::counts(dds_castes_amel) >= 10) >= 3
+dds_castes_amel <- dds_castes_amel[keep, ]
+dim(dds_castes_amel)
+# 12232    18
+
+# Run the DESeq2 pipeline and extract results
+dds_castes_amel <- DESeq2::DESeq(dds_castes_amel,
+  test = "Wald", betaPrior = FALSE
+)
+
+# Extract results from DESeq2 analysis
+res_castes_amel <- DESeq2::results(dds_castes_amel)
+
+# Identify hidden batch effects using RUVSeq
+set <- EDASeq::newSeqExpressionSet(DESeq2::counts(dds_castes_amel,
+  normalized = FALSE
+))
+idx <- rowSums(DESeq2::counts(set) >= 10) >= 3
+set <- set[idx, ]
+set <- EDASeq::betweenLaneNormalization(set, which = "upper")
+notsig <- rownames(res_castes_amel)[which(res_castes_amel$pvalue > 0.1)]
+empirical <- rownames(set)[rownames(set) %in% notsig]
+set <- RUVSeq::RUVg(set, empirical, k = 2)
+covars <- cbind(set$W_1, set$W_2)
+
+# Add factor(s) of unwanted variation to the design in `DESeqDataSet` object
+ddsruv_castes_amel <- dds_castes_amel
+ddsruv_castes_amel$W1 <- set$W_1
+ddsruv_castes_amel$W2 <- set$W_2
+design(ddsruv_castes_amel) <- ~ W1 + W2 + caste
+
+# Apply the variance stabilising transformation
+# The transformed data are on the log2 scale
+vsd_corrected_castes_amel <- DESeq2::vst(ddsruv_castes_amel, blind = FALSE)
+
+# Remove batch effects from the variance-stabilised data
+assay(vsd_corrected_castes_amel) <- limma::removeBatchEffect(
+  assay(vsd_corrected_castes_amel),
+  design = model.matrix(~caste, data = table_castes_amel),
+  covariates = covars
+  # covariates = set$W_1
+)
+
+pca_data_castes_amel <- DESeq2::plotPCA(vsd_corrected_castes_amel,
+  intgroup = c("study", "caste"),
+  ntop = 500, returnData = TRUE
+)
+
+# Extract percentages of variance explained from list
+pca_var_castes_amel <- round(100 * attr(pca_data_castes_amel, "percentVar"))
+
+# Convert from list to data frame, add factor columns
+pca_data_castes_amel <- pca_data_castes_amel %>%
+  dplyr::mutate(tissue = "brain") %>%
+  dplyr::mutate(life_stage = "adult") %>%
+  dplyr::mutate(species = "amel") %>%
+  dplyr::select(-group) %>%
+  dplyr::relocate(PC1, PC2, name, life_stage, tissue, caste, study, species)
+```
+
+## _Bombus terrestris_ life stages
+```{r}
+table_lifestages_bter <- table_harrison
+files_lifestages_bter <- files_harrison
+
+# Import kallisto quantifications
+txi_lifestages_bter <- tximport::tximport(files_lifestages_bter,
+  type = "kallisto",
+  tx2gene = tx2gene_bter,
+  txOut = FALSE
+)
+
+# Create a DESeqDataSet object
+dds_lifestages_bter <- DESeq2::DESeqDataSetFromTximport(txi_lifestages_bter,
+  colData = table_lifestages_bter,
+  design = ~condition
+)
+
+# Choose the reference level for condition factor
+dds_lifestages_bter$condition <- relevel(dds_lifestages_bter$condition,
+  ref = "worker_larva"
+)
+
+# Estimate the size factors
+dds_lifestages_bter <- DESeq2::estimateSizeFactors(dds_lifestages_bter)
+
+# Pre-filter the dataset
+dim(dds_lifestages_bter)
+# 10661
+# At least 3 samples with a count of 10 or higher
+# The number of samples would be set to the smallest group size
+keep <- rowSums(DESeq2::counts(dds_lifestages_bter) >= 10) >= 3
+dds_lifestages_bter <- dds_lifestages_bter[keep, ]
+dim(dds_lifestages_bter)
+# 9892
+
+# Variance stabilising transformation
+vsd_lifestages_bter <- DESeq2::vst(dds_lifestages_bter, blind = FALSE)
+
+pca_data_lifestages_bter <- DESeq2::plotPCA(vsd_lifestages_bter,
+  intgroup = "condition",
+  n = 500,
+  returnData = TRUE
+)
+
+# Extract percentages of variance explained from list
+pca_var_lifestages_bter <- round(100 * attr(pca_data_lifestages_bter, "percentVar"))
+
+# Convert from list to data frame, add factor columns
+pca_data_lifestages_bter <- pca_data_lifestages_bter %>%
+  dplyr::mutate(life_stage = case_when(
+    grepl("larva", name) ~ "larva",
+    grepl("pupa", name) ~ "pupa",
+    grepl("adult", name) ~ "adult"
+  )) %>%
+  dplyr::mutate(tissue = "whole_body") %>%
+  dplyr::mutate(caste = case_when(
+    grepl("queen", name) ~ "queen",
+    grepl("worker", name) ~ "worker"
+  )) %>%
+  dplyr::mutate(study = "harrison") %>%
+  dplyr::mutate(species = "bter") %>%
+  dplyr::select(-tidyselect::one_of(c("group", "condition"))) %>%
+  dplyr::relocate(PC1, PC2, name, life_stage, tissue, caste, study, species)
+```
+
+## Compose Figure 2
+## Principal component analysis plots
+```{r}
+# Create function to reformat factor labels
+reformat_factor_labels <- function(df) {
+  df <- df %>%
+    # dplyr::rename_with(stringr::str_to_title) %>%
+    dplyr::mutate_at(
+      c("life_stage", "tissue", "caste", "study"),
+      stringr::str_to_sentence
+    ) %>%
+    dplyr::mutate(
+      tissue = stringr::str_replace(tissue, "_", " ")
+    ) %>%
+    dplyr::mutate(species = dplyr::recode(species,
+      "amel" = "Apis mellifera",
+      "bter" = "Bombus terrestris"
+    ))
+  return(df)
+}
+
+# PCA plot of A. mellifera tissues
+pca_plot_tissues_amel <- pca_data_tissues_amel %>%
+  reformat_factor_labels(.) %>%
+  ggplot(aes(
+    x = PC1, y = PC2, color = tissue, shape = tissue
+  )) +
+  geom_point(size = 4, stroke = 1) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
+    plot.subtitle = element_text(hjust = 0.5, size = 14, face = "plain"),
+    legend.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12)
+  ) +
+  scale_shape_manual(values = c(0, 2:9)) +
+  labs(
+    title = expression(paste(
+      "Relationships among samples of tissues of ", italic("Apis mellifera")
+    )),
+    color = "Tissue",
+    shape = "Tissue",
+    x = paste0("PC1 [", pca_var_tissues_amel[1], "%]"),
+    y = paste0("PC2 [", pca_var_tissues_amel[2], "%]")
+  ) +
+  coord_fixed()
+
+pca_plot_tissues_amel
+
+# PCA plot of A. mellifera castes
+pca_plot_castes_amel <- pca_data_castes_amel %>%
+  dplyr::mutate(study = case_when(
+    study == "christen" ~ "Christen et al., 2018",
+    study == "jasper" ~ "Jasper et al., 2015",
+    study == "liberti" ~ "Liberti et al., 2019",
+    study == "manfredini" ~ "Manfredini et al., 2015"
+  )) %>%
+  dplyr::mutate_at(
+    c("life_stage", "tissue", "caste", "study"), stringr::str_to_sentence
+  ) %>%
+  ggplot(
+    aes(x = PC1, y = PC2, color = caste, shape = study)
+  ) +
+  geom_point(size = 4, stroke = 1) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
+    plot.subtitle = element_text(hjust = 0.5, size = 14, face = "plain"),
+    legend.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12)
+  ) +
+  scale_shape_manual(values = c(0, 2:9)) +
+  labs(
+    title = expression(paste(
+      "Relationships among samples of brains of ", italic("Apis mellifera")
+    )),
+    subtitle = "(with batch effect removal)",
+    color = "Caste",
+    shape = "Study",
+    x = paste0("PC1 [", pca_var_castes_amel[1], "%]"),
+    y = paste0("PC2 [", pca_var_castes_amel[2], "%]")
+  ) +
+  guides(
+    color = guide_legend(order = 1),
+    shape = guide_legend(order = 2, override.aes = list(color = "#9E9E9E"))
+  ) +
+  coord_fixed()
+
+pca_plot_castes_amel
+
+# PCA plot of B. terrestris life stages
+pca_plot_lifestages_bter <- pca_data_lifestages_bter %>%
+  reformat_factor_labels(.) %>%
+  ggplot(aes(
+    x = PC1, y = PC2, color = caste, shape = life_stage
+  )) +
+  geom_point(size = 4, stroke = 1) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
+    plot.subtitle = element_text(hjust = 0.5, size = 14, face = "plain"),
+    legend.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12)
+  ) +
+  scale_shape_manual(values = c(0, 2:9)) +
+  labs(
+    title = expression(paste(
+      "Relationships among samples of life stages of ", italic("Bombus terrestris")
+    )),
+    color = "Caste",
+    shape = "Life stage",
+    x = paste0("PC1 [", pca_var_lifestages_bter[1], "%]"),
+    y = paste0("PC2 [", pca_var_lifestages_bter[2], "%]")
+  ) +
+  guides(
+    color = guide_legend(order = 1),
+    shape = guide_legend(order = 2, override.aes = list(color = "#9E9E9E"))
+  ) +
+  coord_fixed()
+
+pca_plot_lifestages_bter
+
+# Combine PCA plots
+figure_two <- pca_plot_tissues_amel /
+  pca_plot_castes_amel /
+  pca_plot_lifestages_bter
+
+figure_two
+
+ggsave(figure_two,
+  filename = here::here(
+    "results", "2022-07-20-gene_expression", "figure_two.pdf"
+  ),
+  width = 8,
+  height = 12,
+  units = "in",
+  dpi = "retina"
+)
+```
+
+# Figure 3. Heatmap of subunit counts of _Apis mellifera_ samples
+```{r}
+vsd_nachrs_tissues_amel <- add_factors_nachrs_amel(assay(vsd_tissues_amel)) %>%
+  dplyr::rename(vst_count = norm_count)
+
+vsd_nachrs_castes_amel <- add_factors_nachrs_amel(
+  assay(vsd_corrected_castes_amel)
+) %>%
+  dplyr::rename(vst_count = norm_count)
+
+figure_three_a <- vsd_nachrs_tissues_amel %>%
+  tidyr::unite(caste_tissue, c(caste, tissue), sep = "_", remove = FALSE) %>%
+  dplyr::mutate(caste_tissue = ifelse(tissue != "brain",
+    stringr::str_replace(caste_tissue, pattern = "worker_", replacement = ""),
+    caste_tissue
+  )) %>%
+  dplyr::mutate(study = case_when(
+    study == "jasper" ~ "Jasper et al., 2015",
+  )) %>%
+  dplyr::mutate(
+    caste_tissue = stringr::str_to_sentence(caste_tissue)
+  ) %>%
+  dplyr::mutate(
+    caste_tissue = stringr::str_replace(caste_tissue, "_", " ") %>% as.factor()
+  ) %>%
+  dplyr::mutate(caste_tissue = forcats::fct_relevel(
+    caste_tissue,
+    c(
+      "Worker brain", "Thoracic ganglion", "Antenna",
+      "Hypopharyngeal gland", "Mandibular gland", "Muscle", "Midgut",
+      "Malpighian tubule", "Nasonov gland"
+    )
+  )) %>%
+  ggplot(aes(
+    x = sample, y = subunit, fill = vst_count
+  )) +
+  geom_tile() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
+    plot.subtitle = element_text(hjust = 0.5, size = 14, face = "plain"),
+    legend.title = element_blank(),
+    legend.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    axis.text.x = element_blank(),
+    panel.spacing = unit(6, "mm"),
+    strip.text = element_text(size = 12, angle = 90, hjust = 0)
+  ) +
+  labs(
+    title = expression(paste(
+      "Heatmap of subunit counts of ", italic("Apis mellifera"), " tissues"
+    )),
+    subtitle = "(samples from Jasper et al., 2015)",
+    x = "Sample",
+    y = expression(paste("Log"[2], " (VST) transformed count"))
+  ) +
+  scale_y_discrete(limits = rev(levels(factor(vsd_nachrs_tissues_amel$subunit)))) +
+  scale_fill_gradientn(
+    colors = c("#004d99", "#78B7C5", "#EBCC2A")
+    # c("#004d99", "#3B9AB2", "#78B7C5", "#EBCC2A")
+    # limits = c(4, 12), 
+    # breaks = seq(4, 12, by = 2)
+  ) +
+  facet_grid(. ~ caste_tissue,
+    scales = "free", space = "free",
+    # . ~ caste_tissue + study,
+    # put labels in the same strip instead of creating two strips
+    labeller = function(labels) {
+      labels <- lapply(labels, as.character)
+      list(do.call(paste, c(labels, list(sep = "\n"))))
+    }
+  )
+
+figure_three_a
+
+figure_three_b <- vsd_nachrs_castes_amel %>%
+  tidyr::unite(caste_tissue, c(caste, tissue), sep = "_", remove = FALSE) %>%
+  dplyr::mutate(caste_tissue = ifelse(tissue != "brain",
+    stringr::str_replace(caste_tissue, pattern = "worker_", replacement = ""),
+    caste_tissue
+  )) %>%
+  dplyr::mutate(study = case_when(
+    study == "christen" ~ "Christen et al., 2018",
+    study == "jasper" ~ "Jasper et al., 2015",
+    study == "liberti" ~ "Liberti et al., 2019",
+    study == "manfredini" ~ "Manfredini et al., 2015"
+  )) %>%
+  dplyr::mutate(
+    caste_tissue = stringr::str_to_sentence(caste_tissue)
+  ) %>%
+  dplyr::mutate(
+    caste_tissue = stringr::str_replace(caste_tissue, "_", " ") %>% as.factor()
+  ) %>%
+  dplyr::mutate(caste_tissue = forcats::fct_relevel(
+    caste_tissue, c("Queen brain", "Worker brain")
+  )) %>%
+  ggplot(aes(
+    x = sample, y = subunit, fill = vst_count
+  )) +
+  geom_tile() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
+    plot.subtitle = element_text(hjust = 0.5, size = 14, face = "plain"),
+    legend.title = element_blank(),
+    legend.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    axis.title.y = element_markdown(size = 14),
+    axis.text = element_text(size = 12),
+    axis.text.x = element_blank(),
+    panel.spacing = unit(6, "mm"),
+    strip.text = element_text(size = 12, angle = 90, hjust = 0)
+  ) +
+  labs(
+    title = expression(paste(
+      "Heatmap of subunit counts of ", italic("Apis mellifera"), " castes"
+    )),
+    x = "Sample",
+    y = "Log<sub>2</sub> (VST) transformed count <br>(with batch effect removal)"
+  ) +
+  scale_y_discrete(limits = rev(levels(factor(vsd_nachrs_castes_amel$subunit)))) +
+  scale_fill_gradientn(
+    colors = c("#004D99", "#78B7C5", "#EBCC2A")
+    # limits = c(4, 12), 
+    # breaks = seq(4, 12, by = 2)
+  ) +
+  facet_grid(. ~ caste_tissue + study,
+    scales = "free", space = "free",
+    # put labels in the same strip instead of creating two strips
+    labeller = function(labels) {
+      labels <- lapply(labels, as.character)
+      list(do.call(paste, c(labels, list(sep = "\n"))))
+    }
+  )
+
+figure_three_b
+
+figure_three <- egg::ggarrange(figure_three_a, figure_three_b,
+  widths = c(2.8, 1)
+)
+
+ggsave(figure_three,
+  filename = here::here(
+    "results", "2022-07-20-gene_expression", "figure_three.pdf"
+  ),
+  width = 18,
+  height = 6,
+  units = "in",
+  dpi = "retina"
+)
+
+# figure_three_a <- figure_three_a +
+#   ggh4x::force_panelsizes(
+#     rows = unit(4, "cm"),
+#     cols = unit(3, "cm")
+#   )
+
+# figure_three_b <- figure_three_b +
+#   ggh4x::force_panelsizes(
+#     rows = unit(4, "cm"),
+#     cols = unit(3, "cm")
+#   )
+
+# figure_three_a | figure_three_b
+
+# gridExtra::grid.arrange(grobs = lapply(
+#   list(figure_three_a, figure_three_b),
+#   egg::set_panel_size,
+#   width = unit(3, "cm"),
+#   height = unit(3, "in")
+# ))
+```
+
+# Figure 4. Interspecies analysis with samples of both species normalised together
+Worker caste data sets:  
+Christen et al., 2018 (amel)  
+Jasper et al., 2015 (amel)  
+Porath et al., 2019 (bter)  
+Witwicka et al., 2022 (bter)  
+
+Queen caste data sets:   
+Liberti et al., 2019 (amel)  
+Manfredini et al., 2015 (amel)  
+Manfredini et al., 2017 (bter)  
+
+# Read tables of samples and covariates
+## _Apis mellifera_
+```{r}
+# Jasper et al., 2015
+# Select the worker "brain" samples
+table_brain_jasper <- table_jasper %>% dplyr::filter(tissue == "brain")
+
+files_brain_jasper <- files_jasper[grep("brain", files_jasper)]
+
+# Combine input files and information about the samples
+files_brain_amel <- c(
+  files_christen, files_brain_jasper, files_liberti, files_manfredini_amel
+)
+
+table_brain_amel <- dplyr::bind_rows(
+  table_christen, table_brain_jasper, table_liberti, table_manfredini_amel
+) %>%
+  dplyr::select(sample, caste, tissue, study, species)
+```
+
+## _Bombus terrestris_
+```{r}
+# Workers
+# Porath et al., 2019
+# Set sample identifiers using the names of the kallisto output directories
+ids_porath <- dir(here::here(
+  "results", "2019-porath_worker_brain", "2020-07-14-kallisto", "results"
+))
+
+# Read metadata table
+table_porath <- read.csv(
+  here::here(
+    "metadata_bter",
+    "2019-porath_worker_brains_metadata.csv"
+  ),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+
+files_porath <- here::here(
+  "results", "2019-porath_worker_brain", "2020-07-14-kallisto", "results",
+  table_porath$sample,
+  # "abundance.h5"
+  "abundance.h5"
+)
+
+names(files_porath) <- table_porath$sample
+
+# Check that sample names match
+all(ids_porath %in% table_porath$sample)
+
+# Check that all files exist
+all(file.exists(files_porath))
+
+# Witwicka et al., 2022
+# Set sample identifiers using the names of the kallisto output directories
+ids_witwicka <- dir(here::here(
+  "results", "2021-witwicka_worker_brain"
+))
+
+# Read metadata table
+table_witwicka <- read.csv(
+  here::here("metadata_bter", "2021-witwicka_worker_brains_metadata.csv"),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+
+# Read .h5 files in
+files_witwicka <- here::here(
+  "results", "2021-witwicka_worker_brain",
+  table_witwicka$sample,
+  # "abundance.h5"
+  "abundance.h5"
+)
+
+# Assign names to files
+names(files_witwicka) <- table_witwicka$sample
+
+# Check that sample names match
+all(ids_witwicka %in% table_witwicka$sample)
+
+# Check that all files exist
+all(file.exists(files_witwicka))
+
+# Queens
+# Manfredini et al., 2017
+# Set sample identifiers using the names of the kallisto output directories
+ids_manfredini_bter <- dir(here::here(
+  "results", "2017-manfredini_queen_brain", "2020-08-08-kallisto", "results"
+))
+
+# Read metadata table
+table_manfredini_bter <- read.csv(
+  here::here("metadata_bter", "2017-manfredini_queen_brain_metadata.csv"),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+
+# Read .h5 files in
+files_manfredini_bter <- here::here(
+  "results", "2017-manfredini_queen_brain", "2020-08-08-kallisto", "results",
+  table_manfredini_bter$sample,
+  "abundance.h5"
+)
+
+# Assign names to files
+names(files_manfredini_bter) <- table_manfredini_bter$sample
+
+# Check that sample names match
+all(ids_manfredini_bter %in% table_manfredini_bter$sample)
+
+# Check that all files exist
+all(file.exists(files_manfredini_bter))
+
+# Combine input files and information about the samples
+files_brain_bter <- c(files_porath, files_manfredini_bter)
+
+table_brain_bter <- dplyr::bind_rows(table_porath, table_manfredini_bter)
+```
+
+# Import `kallisto` quantifications using `tximport`
+```{r}
+# Apis mellifera
+txi_brain_amel <- tximport::tximport(files_brain_amel,
+  type = "kallisto",
+  tx2gene = tx2gene_amel,
+  txOut = FALSE
+)
+
+# Bombus terrestris
+txi_brain_bter <- tximport::tximport(files_brain_bter,
+  type = "kallisto",
+  tx2gene = tx2gene_bter,
+  txOut = FALSE
+)
+
+txi_brain_witw_bter <- tximport::tximport(files_witwicka,
+  type = "kallisto",
+  tx2gene = tx2gene_bter,
+  txOut = FALSE
+)
+```
+
+## Normalise the counts of both species, including only one-to-one orthologs
+```{r}
+# Retrieve the orthology data for _A. mellifera_ and _B. terrestris_
+biomaRt::listAttributes(mart_amel) %>% head()
+
+orthologs_amel_bter <- biomaRt::getBM(
+  mart = mart_amel,
+  filters = "ensembl_gene_id",
+  values = tx2gene_amel$ensembl_gene_id,
+  attributes = c(
+    "ensembl_gene_id",
+    "bterrestris_eg_homolog_ensembl_gene",
+    "bterrestris_eg_homolog_orthology_type",
+    "bterrestris_eg_homolog_orthology_confidence"
+  )
+)
+
+# orthologs_mart_export <- read_csv(
+#   file = here::here("orthologs_mart_export.csv"))
+
+# Check the orthology type of all nAChR subunits
+orthologs_amel_bter %>%
+  dplyr::filter(ensembl_gene_id %in% nachrs_amel)
+# 8/11 subunits have the type "ortholog_one2one"
+# Subunit "GB43064, alpha5", ambiguous orthology, "ortholog_one2many"
+# Subunit "GB43416, alpha6", missing ortholog, "NA"
+# Subunit "GB53428, beta2", missing ortholog, "NA"
+
+# Fix the ambiguous/missing orthology relationships of certain subunits
+orthologs_amel_bter <- orthologs_amel_bter %>%
+  # change "ortholog_one2many" or "NA" to "ortholog_one2one"
+  dplyr::mutate(
+    bterrestris_eg_homolog_orthology_type = replace(
+      x = bterrestris_eg_homolog_orthology_type,
+      list = ensembl_gene_id %in% nachrs_amel, values = "ortholog_one2one"
+    )
+  ) %>%
+  # alpha6, add bumble bee subunit
+  dplyr::mutate(
+    bterrestris_eg_homolog_ensembl_gene = replace(
+      x = bterrestris_eg_homolog_ensembl_gene,
+      list = ensembl_gene_id == "GB43416", values = "LOC100643274"
+    )
+  ) %>%
+  # alpha9, set bumble bee subunit to "NA"
+  dplyr::mutate(
+    bterrestris_eg_homolog_ensembl_gene = replace(
+      x = bterrestris_eg_homolog_ensembl_gene,
+      list = ensembl_gene_id == "GB53427", values = "NA"
+    )
+  ) %>%
+  # beta2, add bumble bee subunit
+  dplyr::mutate(
+    bterrestris_eg_homolog_ensembl_gene = replace(
+      x = bterrestris_eg_homolog_ensembl_gene,
+      list = ensembl_gene_id == "GB53428", values = "LOC100646787"
+    )
+  )
+
+# Sanity check of modified orthology relationships
+orthologs_amel_bter %>%
+  dplyr::filter(ensembl_gene_id %in% nachrs_amel)
+
+# Keep only the one-to-one orthologs
+# Discard the divergent subunits "alpha9" and "beta2"
+divergent_subunits_amel <- c("GB53427", "GB53428")
+
+one2one_amel_bter <- orthologs_amel_bter %>%
+  dplyr::filter(bterrestris_eg_homolog_orthology_type == "ortholog_one2one") %>%
+  dplyr::filter(!ensembl_gene_id %in% divergent_subunits_amel) # Remove divergent subunits
+
+# Create vector of bumble bee one-to-one orthologs
+one2one_bter <- one2one_amel_bter$bterrestris_eg_homolog_ensembl_gene
+
+# Keep the tximport counts of only one-to-one orthologs
+txi_counts_brain_amel <- txi_brain_amel$counts
+
+txi_counts_brain_bter <- txi_brain_bter$counts %>%
+  tibble::as_tibble(rownames = "ensembl_gene_id")
+
+txi_counts_brain_witw_bter <- txi_brain_witw_bter$counts %>%
+  tibble::as_tibble(rownames = "ensembl_gene_id")
+
+txi_counts_brain_bter <- dplyr::full_join(
+  x = txi_counts_brain_bter, y = txi_counts_brain_witw_bter,
+  by = "ensembl_gene_id"
+) %>%
+  tibble::column_to_rownames(var = "ensembl_gene_id") %>%
+  as.matrix()
+
+txi_counts_brain_amel <- txi_counts_brain_amel %>%
+  tibble::as_tibble(rownames = "ensembl_gene_id_amel") %>%
+  dplyr::filter(ensembl_gene_id_amel %in% one2one_amel_bter$ensembl_gene_id)
+
+txi_counts_brain_bter <- txi_counts_brain_bter %>%
+  tibble::as_tibble(rownames = "ensembl_gene_id_bter") %>%
+  dplyr::filter(
+    ensembl_gene_id_bter %in% one2one_amel_bter$bterrestris_eg_homolog_ensembl_gene
+  )
+
+# Join the table of honey bee counts and the table of one-to-one orthologs
+txi_counts_amel_bter <- dplyr::left_join(
+  txi_counts_brain_amel, one2one_amel_bter,
+  by = c("ensembl_gene_id_amel" = "ensembl_gene_id")
+)
+
+# Join the table of bumble bee counts
+txi_counts_amel_bter <- dplyr::full_join(
+  txi_counts_amel_bter, txi_counts_brain_bter,
+  by = c("bterrestris_eg_homolog_ensembl_gene" = "ensembl_gene_id_bter")
+)
+
+tibble::glimpse(txi_counts_amel_bter)
+
+# Create a vector of columns to remove
+drop_columns <- c(
+  "bterrestris_eg_homolog_ensembl_gene",
+  "bterrestris_eg_homolog_orthology_type",
+  "bterrestris_eg_homolog_orthology_confidence"
+)
+
+# Remove unnecessary columns
+txi_counts_amel_bter <- txi_counts_amel_bter %>%
+  dplyr::select(-dplyr::one_of(drop_columns)) %>%
+  dplyr::rename("ensembl_gene_id" = "ensembl_gene_id_amel") %>%
+  tibble::column_to_rownames(var = "ensembl_gene_id")
+
+# Combine the data tables of both species
+table_amel_bter <- dplyr::bind_rows(
+  table_brain_amel, table_brain_bter, table_witwicka
+)
+
+# Convert data frame to matrix and decimals to integers
+txi_counts_amel_bter <- as.matrix(txi_counts_amel_bter)
+mode(txi_counts_amel_bter) <- "integer"
+# head(txi_counts_amel_bter)
+
+# Create `DESeqDataSet` object from the matrix including samples of both species
+dds_amel_bter <- DESeq2::DESeqDataSetFromMatrix(
+  countData = as.matrix(txi_counts_amel_bter),
+  colData = table_amel_bter,
+  design = ~ caste + species
+)
+
+# Estimate the size factors
+dds_amel_bter <- DESeq2::estimateSizeFactors(dds_amel_bter)
+# DESeq2::sizeFactors(dds_amel_bter)
+
+# Filtering
+keep_amel_bter <- rowSums(DESeq2::counts(dds_amel_bter) >= 10) >= 3
+dds_amel_bter <- dds_amel_bter[keep_amel_bter, ]
+```
+
+## Generate interspecies normalised counts
+```{r}
+# Get the counts of both species normalised together
+counts_amel_bter <- DESeq2::counts(dds_amel_bter, normalized = TRUE) %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column(var = "ensembl_gene_id")
+
+# Retain the counts of subunits
+counts_nachrs_amel_bter <- counts_amel_bter %>%
+  dplyr::filter(ensembl_gene_id %in% nachrs_amel)
+
+# Create variable of subunit names
+counts_nachrs_amel_bter <- counts_nachrs_amel_bter %>%
+  dplyr::mutate(subunit = case_when(
+    ensembl_gene_id == "GB42850" ~ "alpha1",
+    ensembl_gene_id == "GB42644" ~ "alpha2",
+    ensembl_gene_id == "GB47845" ~ "alpha3",
+    ensembl_gene_id == "GB43275" ~ "alpha4",
+    ensembl_gene_id == "GB43064" ~ "alpha5",
+    ensembl_gene_id == "GB43416" ~ "alpha6",
+    ensembl_gene_id == "GB53053" ~ "alpha7",
+    ensembl_gene_id == "GB40923" ~ "alpha8",
+    ensembl_gene_id == "GB53427" ~ "alpha9",
+    ensembl_gene_id == "GB53055" ~ "beta1",
+    ensembl_gene_id == "GB53428" ~ "beta2"
+  )) %>%
+  dplyr::relocate(subunit, .after = ensembl_gene_id)
+
+# ensembl_gene_id == "GB50159" ~ "alpha10",
+
+# Discard data from divergent subunits
+divergent_subunits <- c("alpha9", "beta2")
+
+counts_nachrs_amel_bter <- counts_nachrs_amel_bter %>%
+  dplyr::filter(!subunit %in% divergent_subunits) # Remove divergent subunits
+
+# Convert to long format
+counts_nachrs_amel_bter <- counts_nachrs_amel_bter %>%
+  tidyr::pivot_longer(
+    cols = -c(ensembl_gene_id, subunit),
+    names_to = "sample", values_to = "norm_count"
+  )
+
+# Add study, caste, and species variables
+counts_nachrs_amel_bter <- counts_nachrs_amel_bter %>%
+  dplyr::mutate(study = case_when(
+    grepl(paste(table_christen$sample, collapse = "|"), sample) ~ "christen",
+    grepl(paste(table_brain_jasper$sample, collapse = "|"), sample) ~ "jasper",
+    grepl(paste(table_liberti$sample, collapse = "|"), sample) ~ "liberti",
+    grepl(paste(table_manfredini_amel$sample, collapse = "|"), sample) ~ "manfredini_2015",
+    grepl(paste(table_porath$sample, collapse = "|"), sample) ~ "porath",
+    grepl(paste(table_witwicka$sample, collapse = "|"), sample) ~ "witwicka",
+    grepl(paste(table_manfredini_bter$sample, collapse = "|"), sample) ~ "manfredini_2017"
+  )) %>%
+  dplyr::mutate(caste = case_when(
+    grepl("christen|jasper", study) ~ "worker",
+    grepl("liberti|manfredini_2015", study) ~ "queen",
+    grepl("porath|witwicka", study) ~ "worker",
+    grepl("manfredini_2017", study) ~ "queen"
+  )) %>%
+  dplyr::mutate(species = case_when(
+    grepl("christen|jasper|liberti|manfredini_2015", study) ~ "amel",
+    grepl("porath|witwicka|manfredini_2017", study) ~ "bter"
+  ))
+
+tibble::glimpse(counts_nachrs_amel_bter)
+# clipr::write_clip(counts_nachrs_amel_bter)
+```
+
+## Calculate the medians of subunit proportions
+```{r}
+# Create data frames of normalised counts and calculate expression proportions
+# Discard data from divergent subunits
+proportions_amel_bter <- counts_nachrs_amel_bter %>%
+  dplyr::group_by(sample) %>%
+  dplyr::mutate(proportion = norm_count / sum(norm_count)) %>%
+  dplyr::filter(!subunit %in% divergent_subunits) %>% # Remove divergent subunits
+  dplyr::mutate_if(is.numeric, round, digits = 4) %>%
+  dplyr::ungroup()
+
+median_proportions <- proportions_amel_bter %>%
+  dplyr::ungroup() %>% # Remove grouping variable previously created
+  dplyr::select(species, caste, subunit, proportion) %>%
+  dplyr::group_by(species, caste, subunit) %>%
+  dplyr::summarise_at(vars(-group_cols()), ~ median(.)) %>%
+  dplyr::rename(median_proportion = proportion) %>%
+  dplyr::mutate_if(is.numeric, round, digits = 4) %>%
+  dplyr::ungroup()
+
+# Change to wide format
+median_proportions_wide <- median_proportions %>%
+  tidyr::pivot_wider(names_from = species, values_from = median_proportion)
+
+median_proportions_queens_wide <- median_proportions_wide %>%
+  dplyr::filter(caste == "queen")
+
+median_proportions_workers_wide <- median_proportions_wide %>%
+  dplyr::filter(caste == "worker")
+```
+
+## Plot correlogram of median proportions
+```{r}
+proportions_correlogram <- proportions_amel_bter %>%
+  dplyr::ungroup() %>% # Remove grouping variable previously created
+  dplyr::select(species, caste, study, subunit, proportion) %>%
+  dplyr::group_by(species, caste, study, subunit) %>%
+  dplyr::summarise_at(vars(-group_cols()), ~ median(.)) %>%
+  dplyr::rename(median_proportion = proportion) %>%
+  dplyr::mutate_if(is.numeric, round, digits = 4)
+
+proportions_correlogram_wide <- proportions_correlogram %>%
+  tidyr::unite("group", c(caste, study, species), sep = "_", remove = TRUE) %>%
+  dplyr::ungroup() %>%
+  tidyr::pivot_wider(names_from = group, values_from = median_proportion)
+
+proportions_correlogram_wide <- as.data.frame(proportions_correlogram_wide)
+rownames(proportions_correlogram_wide) <- proportions_correlogram_wide$subunit
+proportions_correlogram_wide <- proportions_correlogram_wide[, -1]
+
+# Calculate Spearman's coeficients
+cormat <- cor(proportions_correlogram_wide, method = "spearman")
+
+get_upper_tri <- function(x) {
+  x[lower.tri(x)] <- NA
+  return(x)
+}
+
+upper_tri <- get_upper_tri(cormat)
+
+cormat_melted <- reshape2::melt(upper_tri, na.rm = TRUE)
+
+cormat_melted <- cormat_melted %>%
+  as.data.frame() %>%
+  dplyr::mutate(caste_xfacet = case_when(
+    grepl("queen", Var2) ~ "Queens",
+    grepl("worker", Var2) ~ "Workers"
+  )) %>%
+  dplyr::mutate(species_xfacet = case_when(
+    grepl("amel", Var2) ~ "A. mellifera",
+    grepl("bter", Var2) ~ "B. terrestris"
+  )) %>%
+  dplyr::mutate(caste_yfacet = case_when(
+    grepl("queen", Var1) ~ "Queens",
+    grepl("worker", Var1) ~ "Workers"
+  )) %>%
+  dplyr::mutate(species_yfacet = case_when(
+    grepl("amel", Var1) ~ "A. mellifera",
+    grepl("bter", Var1) ~ "B. terrestris"
+  ))
+
+cormat_labels <- c(
+  "queen_liberti_amel" = "Liberti et al., 2019 (n = 3)",
+  "queen_manfredini_2015_amel" = "Manfredini et al., 2015 (n = 4)",
+  "worker_christen_amel" = "Christen et al., 2018 (n = 5)",
+  "worker_jasper_amel" = "Jasper et al., 2015 (n = 6)",
+  "queen_manfredini_2017_bter" = "Manfredini et al., 2017 (n = 9)",
+  "worker_porath_bter" = "Porath et al., 2019 (n = 8)",
+  "worker_witwicka_bter" = "This study (n = 10)"
+)
+
+# Italicise species names
+strip_facet_species <- ggh4x::strip_nested(
+  text_x = ggh4x::elem_list_text(face = c(rep("italic", 2), rep("plain", 4))),
+  text_y = ggh4x::elem_list_text(face = c(rep("italic", 2), rep("plain", 4)))
+)
+
+figure_four_a <- ggplot(cormat_melted, aes(x = Var2, y = Var1)) +
+  geom_tile(aes(fill = value, width = 0.9, height = 0.9), size = 0.5) +
+  geom_text(aes(label = round(value, digits = 2)), color = "white", size = 4) +
+  scale_fill_gradient2(low = "#FC8D62", mid = "#FFD92F", high = "#8DA0CB") +
+  labs(
+    title = "Spearman correlation of median subunit proportions",
+    x = "Source study",
+    y = "Source study",
+    fill = "Spearman\ncorrelation"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
+    axis.title = element_blank(),
+    strip.text = element_text(size = 10, hjust = 0.5),
+    strip.background = element_rect(color = "#9E9E9E"),
+    axis.text.y = element_markdown(size = 12),
+    axis.text.x = element_markdown(size = 12, angle = 45, vjust = 1, hjust = 1)
+  ) +
+  scale_x_discrete(labels = cormat_labels) +
+  scale_y_discrete(labels = cormat_labels) +
+  ggh4x::facet_nested(
+    forcats::fct_rev(species_yfacet) + forcats::fct_rev(caste_yfacet) ~
+      species_xfacet + caste_xfacet,
+    scales = "free", space = "free",
+    # switch = "both",
+    strip = strip_facet_species
+  )
+
+figure_four_a
+
+ggsave(figure_four_a,
+  filename = here::here(
+    "results", "2022-07-20-gene_expression", "figure_four_a.pdf"
+  ),
+  width = 9,
+  height = 8,
+  units = "in",
+  dpi = "retina"
+)
+```
+
+## Plot scatterplot/regression of interspecies median proportions
+```{r}
+subunit_breaks <- c(
+  "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6",
+  "alpha7", "alpha8", "alpha9", "beta1", "beta2"
+)
+
+subunit_colors <- c(
+  "#88CCEE", "#18913D", "#E9C83A", "#882255", "#CC6677",
+  "#332288", "#7B73D1", "#2857BA", "#28A7B6", "#F2CB57", "#F2845C"
+)
+
+regression_queens <- median_proportions_wide %>%
+  dplyr::filter(caste == "queen") %>%
+  ggplot(
+    aes(x = bter, y = amel)
+  ) +
+  geom_point(aes(color = subunit, fill = subunit, shape = subunit),
+    size = 4, stroke = 1
+  ) +
+  geom_smooth(
+    formula = y ~ x, color = "#838383", size = 0.6, method = "lm",
+    se = FALSE
+  ) +
+  scale_shape_manual(values = c(5:9, 12, 14:15, 17, 19)) +
+  scale_color_manual(breaks = subunit_breaks, values = subunit_colors) +
+  scale_fill_manual(breaks = subunit_breaks, values = subunit_colors) +
+  xlim(0, 0.25) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
+    strip.text = element_text(size = 14, face = "plain", hjust = 0.5),
+    legend.title = element_blank(),
+    axis.title = element_text(size = 14),
+    axis.title.y = element_markdown(),
+    legend.text = element_text(size = 12),
+    axis.text = element_text(size = 12)
+  ) +
+  labs(
+    title = "Median proportions of nAChR subunit\nexpression in queen brains",
+    x = expression(paste(
+      italic("Bombus terrestris"), " queens (n = 9)"
+    )),
+    y = "<i>Apis mellifera</i> queens (n = 4)"
+  )
+
+regression_workers <- median_proportions_wide %>%
+  dplyr::filter(caste == "worker") %>%
+  ggplot(
+    aes(x = bter, y = amel)
+  ) +
+  geom_point(aes(color = subunit, fill = subunit, shape = subunit),
+    size = 4, stroke = 1
+  ) +
+  geom_smooth(
+    formula = y ~ x, color = "#838383", size = 0.6, method = "lm",
+    se = FALSE
+  ) +
+  scale_shape_manual(values = c(5:9, 12, 14:15, 17, 19)) +
+  scale_color_manual(breaks = subunit_breaks, values = subunit_colors) +
+  scale_fill_manual(breaks = subunit_breaks, values = subunit_colors) +
+  xlim(0, 0.25) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
+    strip.text = element_text(size = 14, face = "plain", hjust = 0.5),
+    legend.title = element_blank(),
+    axis.title = element_text(size = 14),
+    axis.title.y = element_markdown(),
+    legend.text = element_text(size = 12),
+    axis.text = element_text(size = 12)
+  ) +
+  labs(
+    title = "Median proportions of nAChR subunit\nexpression in worker brains",
+    x = expression(paste(
+      italic("Bombus terrestris"), " workers (n = 8)"
+    )),
+    y = "<i>Apis mellifera</i> workers (n = 6)"
+  )
+
+proportions_regressions <- regression_queens | regression_workers
+
+figure_four_bc <- proportions_regressions +
+  plot_layout(guides = "collect")
+
+figure_four_bc
+
+ggsave(figure_four_bc,
+  filename = here::here(
+    "results", "2022-07-20-gene_expression", "figure_four_bc.pdf"
+  ),
+  width = 12,
+  height = 5,
+  units = "in"
+)
+```
+
+## Compose Figure 4
+## Interspecies correlogram and scatterplots
+```{r}
+figure_four <- figure_four_a | regression_queens | regression_workers
+
+figure_four + plot_layout(guides = "collect")
+
+ggsave(
+  filename = here::here(
+    "results", "2022-07-20-gene_expression", "figure_four.pdf"
+  ),
+  width = 16,
+  height = 7,
+  units = "in"
+)
+```
