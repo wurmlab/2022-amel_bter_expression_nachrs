@@ -33,235 +33,252 @@ load_pkgs <- function(pkg) {
 }
 
 cran_pkgs <- c(
-  "BiocManager", "tidyverse", "RColorBrewer", "pheatmap", "styler", "here"
+  "BiocManager", "tidyverse", "GGally", "ggtext", "ggh4x", "ggforce",
+  "RColorBrewer", "styler", "patchwork", "here"
 )
+
 load_pkgs(cran_pkgs)
 
 bioconductor_pkgs <- c(
-  "biomaRt", "rhdf5", "tximport", "DESeq2", "limma", "RUVSeq"
+  "biomaRt", "rhdf5", "tximport", "DESeq2", "vsn", "hexbin"
 )
+
 load_pkgs(bioconductor_pkgs)
 ```
 
-# Set a custom ggplot theme
+# Set a custom `ggplot` theme
 ```{r}
 # Set a custom ggplot theme
 # devtools::install_github("cttobin/ggthemr")
 library(ggthemr)
+
+# Diverging
 custom_palette <- c(
-  "#9E9E9E", "#59BDEF", "#EBCC2A", "#E1AF00", "#F27C8D", "#7B73D1", "#7B9FE0",
-  "#F5CC7F", "#66C2A5", "#28A7B6", "#F2CB57", "#F2A057", "#F2845C"
+  "#9E9E9E", "#88CCEE", "#18913D", "#E9C83A", "#882255", "#CC6677",
+  "#332288", "#7B73D1", "#2857BA", "#28A7B6", "#F2CB57", "#F2845C"
 )
+
 # ggthemr::colour_plot(custom_palette)
 
 custom_theme <- ggthemr::define_palette(
   swatch = custom_palette,
-  gradient = c(lower = "#59BDEF", upper = "#FF6B5A")
+  gradient = c(lower = "#E9C83A", upper = "#882255")
 )
+
 ggthemr::ggthemr(custom_theme)
 ```
 
-# Create directory for results
 ```{r}
 # here::here()
 # Create directory for results
-dir.create(here::here("results", "2020-07-28-gene_expression"),
+dir.create(here::here("results", "2022-07-20-gene_expression", "supplementary"),
   recursive = TRUE
-)
-
-dir.create(here::here(
-  "results", "2020-07-28-gene_expression",
-  "supplementary"
-),
-recursive = TRUE
 )
 ```
 
 # Read tables of samples and covariates
 ```{r}
-# Jasper et al. 2015
+# Christen et al., 2018
 # Set sample identifiers using the names of the kallisto output directories
-jasper_ids <- dir(here::here(
-  "2015-jasper_worker_tissues", "2020-06-16-kallisto", "results"
+ids_christen <- dir(here::here(
+  "results", "2018-christen_worker_brains", "2020-06-18-kallisto", "results"
 ))
 
 # Read metadata table
-jasper_table <- read.csv(
+table_christen <- read.csv(
   here::here(
-    "amel_metadata",
-    "2015-jasper_worker_tissues_metadata.csv"
-  ),
-  header = TRUE,
-  stringsAsFactors = TRUE
-)
-
-jasper_files <- here::here(
-  "2015-jasper_worker_tissues", "2020-06-16-kallisto", "results",
-  jasper_table$sample,
-  "abundance.h5"
-)
-
-names(jasper_files) <- jasper_table$sample
-
-# Check that sample names match
-all(jasper_ids %in% jasper_table$sample)
-
-# Check that all files exist
-all(file.exists(jasper_files))
-
-# Select the worker "brain" samples
-jasper_brain_table <- jasper_table %>%
-  dplyr::filter(tissue == "brain")
-
-jasper_brain_files <- jasper_files[grep("brain", jasper_files)]
-
-# Manfredini et al. 2015
-# Set sample identifiers using the names of the kallisto output directories
-amel_manfredini_ids <- dir(here::here(
-  "2015-manfredini_queen_brains", "2020-06-18-kallisto", "results"
-))
-
-# Read metadata table
-amel_manfredini_table <- read.csv(
-  here::here(
-    "amel_metadata",
-    "2015-manfredini_queen_brains_metadata.csv"
-  ),
-  header = TRUE,
-  stringsAsFactors = TRUE
-)
-
-amel_manfredini_files <- here::here(
-  "2015-manfredini_queen_brains", "2020-06-18-kallisto", "results",
-  amel_manfredini_table$sample,
-  "abundance.h5"
-)
-
-names(amel_manfredini_files) <- amel_manfredini_table$sample
-
-# Check that sample names match
-all(amel_manfredini_ids %in% amel_manfredini_table$sample)
-
-# Check that all files exist
-all(file.exists(amel_manfredini_files))
-
-# Liberti et al. 2015
-# Set sample identifiers using the names of the kallisto output directories
-liberti_ids <- dir(here::here(
-  "2015-liberti_queen_brains", "2020-06-18-kallisto", "results"
-))
-
-# Read metadata table
-liberti_table <- read.csv(
-  here::here(
-    "amel_metadata",
-    "2015-liberti_queen_brains_metadata.csv"
-  ),
-  header = TRUE,
-  stringsAsFactors = TRUE
-)
-
-liberti_files <- here::here(
-  "2015-liberti_queen_brains", "2020-06-18-kallisto", "results",
-  liberti_table$sample,
-  "abundance.h5"
-)
-
-names(liberti_files) <- liberti_table$sample
-
-# Check that sample names match
-all(liberti_ids %in% liberti_table$sample)
-
-# Check that all files exist
-all(file.exists(liberti_files))
-
-# Christen et al. 2015
-# Set sample identifiers using the names of the kallisto output directories
-christen_ids <- dir(here::here(
-  "2018-christen_worker_brains", "2020-06-18-kallisto", "results"
-))
-
-# Read metadata table
-christen_table <- read.csv(
-  here::here(
-    "amel_metadata",
+    "metadata_amel",
     "2018-christen_worker_brains_metadata.csv"
   ),
   header = TRUE,
   stringsAsFactors = TRUE
 )
 
-christen_files <- here::here(
-  "2018-christen_worker_brains", "2020-06-18-kallisto", "results",
-  christen_table$sample,
+files_christen <- here::here(
+  "results", "2018-christen_worker_brains", "2020-06-18-kallisto", "results",
+  table_christen$sample,
   "abundance.h5"
 )
 
-names(christen_files) <- christen_table$sample
+names(files_christen) <- table_christen$sample
 
 # Check that sample names match
-all(christen_ids %in% christen_table$sample)
+all(ids_christen %in% table_christen$sample)
 
 # Check that all files exist
-all(file.exists(christen_files))
+all(file.exists(files_christen))
+
+# Jasper et al., 2015
+# Set sample identifiers using the names of the kallisto output directories
+ids_jasper <- dir(here::here(
+  "results", "2015-jasper_worker_tissues", "2020-06-16-kallisto", "results"
+))
+
+# Read metadata table
+table_jasper <- read.csv(
+  here::here(
+    "metadata_amel",
+    "2015-jasper_worker_tissues_metadata.csv"
+  ),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+
+files_jasper <- here::here(
+  "results", "2015-jasper_worker_tissues", "2020-06-16-kallisto", "results",
+  table_jasper$sample,
+  "abundance.h5"
+)
+
+names(files_jasper) <- table_jasper$sample
+
+# Check that sample names match
+all(ids_jasper %in% table_jasper$sample)
+
+# Check that all files exist
+all(file.exists(files_jasper))
+
+# Select the worker "brain" samples
+table_brain_jasper <- table_jasper %>%
+  dplyr::filter(tissue == "brain")
+
+files_brain_jasper <- files_jasper[grep("brain", files_jasper)]
+
+# Liberti et al., 2019
+# Set sample identifiers using the names of the kallisto output directories
+ids_liberti <- dir(here::here(
+  "results", "2019-liberti_queen_brains", "2020-06-18-kallisto", "results"
+))
+
+# Read metadata table
+table_liberti <- read.csv(
+  here::here(
+    "metadata_amel",
+    "2019-liberti_queen_brains_metadata.csv"
+  ),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+
+files_liberti <- here::here(
+  "results", "2019-liberti_queen_brains", "2020-06-18-kallisto", "results",
+  table_liberti$sample,
+  "abundance.h5"
+)
+
+names(files_liberti) <- table_liberti$sample
+
+# Check that sample names match
+all(ids_liberti %in% table_liberti$sample)
+
+# Check that all files exist
+all(file.exists(files_liberti))
+
+# Manfredini et al., 2015
+# Set sample identifiers using the names of the kallisto output directories
+ids_manfredini_amel <- dir(here::here(
+  "results", "2015-manfredini_queen_brains", "2020-06-18-kallisto", "results"
+))
+
+# Read metadata table
+table_manfredini_amel <- read.csv(
+  here::here(
+    "metadata_amel",
+    "2015-manfredini_queen_brains_metadata.csv"
+  ),
+  header = TRUE,
+  stringsAsFactors = TRUE
+)
+
+files_manfredini_amel <- here::here(
+  "results", "2015-manfredini_queen_brains", "2020-06-18-kallisto", "results",
+  table_manfredini_amel$sample,
+  "abundance.h5"
+)
+
+names(files_manfredini_amel) <- table_manfredini_amel$sample
+
+# Check that sample names match
+all(ids_manfredini_amel %in% table_manfredini_amel$sample)
+
+# Check that all files exist
+all(file.exists(files_manfredini_amel))
 ```
 
 # Combine input files and information about the samples
 ```{r}
 # Castes
-castes_files <- c(
-  jasper_brain_files, amel_manfredini_files, liberti_files, christen_files
+files_castes_amel <- c(
+  files_christen, files_brain_jasper, files_liberti, files_manfredini_amel
 )
-castes_table <- dplyr::bind_rows(
-  jasper_brain_table, amel_manfredini_table, liberti_table, christen_table
+
+table_castes_amel <- dplyr::bind_rows(
+  table_christen, table_brain_jasper, table_liberti, table_manfredini_amel
 ) %>%
   dplyr::select(sample, caste, tissue, study, species)
 
 # Tissues
-tissues_files <- jasper_files
-tissues_table <- jasper_table
+files_tissues_amel <- files_jasper
+table_tissues_amel <- table_jasper
 ```
 
 # Associate transcripts to genes
 ```{r}
-biomaRt::listMarts(host = "metazoa.ensembl.org")
-# biomaRt::listMarts(host = "eg40-metazoa.ensembl.org") # version 40
-# biomaRt::listEnsemblArchives()
-
-amel_mart <- biomaRt::useMart(
+mart_amel <- biomaRt::useMart(
   biomart = "metazoa_mart",
   dataset = "amellifera_eg_gene",
-  host = "metazoa.ensembl.org" # version 47
+  host = "sep2019-metazoa.ensembl.org" # version 45
 )
 
-amel_tx2gene <- biomaRt::getBM(
+tx2gene_amel <- biomaRt::getBM(
   attributes = c("ensembl_transcript_id", "ensembl_gene_id"),
-  mart = amel_mart
+  mart = mart_amel,
+  useCache = FALSE
 )
+
+# tx2gene_amel <- read.csv(file = "amel4.5tx2gene.csv",
+#   header = TRUE)
 ```
 
 # Import `kallisto` quantifications using `tximport`
 ```{r}
 # Castes
-castes_txi <- tximport::tximport(
-  castes_files,
+txi_castes_amel <- tximport::tximport(
+  files_castes_amel,
   type = "kallisto",
-  tx2gene = amel_tx2gene,
+  tx2gene = tx2gene_amel,
   txOut = FALSE
 )
 
 # Tissues
-tissues_txi <- tximport::tximport(
-  tissues_files,
+txi_tissues_amel <- tximport::tximport(
+  files_tissues_amel,
   type = "kallisto",
-  tx2gene = amel_tx2gene,
+  tx2gene = tx2gene_amel,
   txOut = FALSE
+)
+
+abundance_castes <- txi_castes_amel$abundance %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column(var = "EnsemblGeneID")
+
+abundance_tissues <- txi_tissues_amel$abundance %>%
+  as.data.frame() %>%
+  tibble::rownames_to_column(var = "EnsemblGeneID")
+
+abundance_castes_tissues <- dplyr::left_join(
+  abundance_castes, abundance_tissues
+)
+
+write.csv(abundance_castes_tissues,
+  file = "ensembl_amel4.5_tximport_abundance_castes_tissues.csv",
+  quote = FALSE, row.names = FALSE
 )
 ```
 
 # Create vector of nAChR gene identifiers
 ```{r}
-amel_nachrs <- c(
+nachrs_amel <- c(
   "GB42850", "GB42644", "GB47845", "GB43275", "GB43064", "GB43416",
   "GB53053", "GB40923", "GB53427", "GB53055", "GB53428"
 )
@@ -271,32 +288,98 @@ amel_nachrs <- c(
 ## Identify hidden batch effects using `RUVseq`
 ```{r}
 # Create a DESeqDataSet object
-castes_dds <- DESeq2::DESeqDataSetFromTximport(castes_txi,
-  colData = castes_table,
-  design = ~caste
+dds_castes_amel <- DESeq2::DESeqDataSetFromTximport(txi_castes_amel,
+  colData = table_castes_amel,
+  design = ~ caste
 )
 
 # Choose the reference level for caste factor
-castes_dds$caste <- relevel(castes_dds$caste, ref = "worker")
+dds_castes_amel$caste <- relevel(dds_castes_amel$caste, ref = "worker")
 
 # Pre-filter the low-count genes
-dim(castes_dds)
-keep <- rowSums(DESeq2::counts(castes_dds) >= 10) >= 3
-castes_dds <- castes_dds[keep, ]
-dim(castes_dds)
+dim(dds_castes_amel)
+# 15314    18
+keep <- rowSums(DESeq2::counts(dds_castes_amel) >= 10) >= 3
+dds_castes_amel <- dds_castes_amel[keep, ]
+dim(dds_castes_amel)
+# 12232    18
 
+# Plot PCA **including** batch effects (source study)
+# Apply a variance stabilizing transformation (VST) to the count data
+vsd_batch_amel <- DESeq2::vst(dds_castes_amel, blind = FALSE)
+
+vsd_batch_amel
+
+pca_data_batch_amel <- DESeq2::plotPCA(vsd_batch_amel,
+  intgroup = c("caste", "tissue", "study"),
+  ntop = 500, returnData = TRUE
+)
+
+percent_var_batch_amel <- round(100 * attr(pca_data_batch_amel, "percentVar"))
+
+pca_data_batch_amel %>%
+  dplyr::mutate(study = dplyr::recode(study,
+    "christen" = "Christen et al., 2018",
+    "jasper" = "Jasper et al., 2015",
+    "liberti" = "Liberti et al., 2019",
+    "manfredini" = "Manfredini et al., 2015"
+  )) %>%
+  dplyr::mutate_at(c("caste", "study"), stringr::str_to_sentence) %>%
+  ggplot(aes(x = PC1, y = PC2, color = caste, shape = study)) +
+  geom_point(size = 4, stroke = 1) +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
+    plot.subtitle = element_text(hjust = 0.5, size = 14, face = "plain"),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12)
+  ) +
+  scale_shape_manual(values = 1:12) +
+  labs(
+    title = "Relationships among samples of brains of honey bees",
+    subtitle = "(including batch effects)",
+    x = paste0("PC1 [", percent_var_batch_amel[1], "%]"),
+    y = paste0("PC2 [", percent_var_batch_amel[2], "%]"),
+    color = "Caste",
+    shape = "Study"
+  ) +
+  scale_color_brewer(palette = "Set2") +
+  scale_fill_brewer(palette = "Set2") +
+  guides(
+    color = guide_legend(order = 1),
+    shape = guide_legend(order = 2, override.aes = list(color = "#9E9E9E"))
+  ) +
+  coord_fixed()
+
+ggsave(
+  filename = here::here(
+    "results", "2022-07-20-gene_expression", "supplementary",
+    "amel_castes_vst_counts_including_batch_effects_pca.pdf"
+  ),
+  width = 8,
+  height = 6,
+  units = "in"
+)
+
+# Identify hidden batch effects using `RUVseq`
 # Run the DESeq2 pipeline and extract results
-castes_dds <- DESeq2::DESeq(castes_dds, test = "Wald", betaPrior = FALSE)
-castes_res <- DESeq2::results(castes_dds)
+dds_castes_amel <- DESeq2::DESeq(
+  dds_castes_amel,
+  test = "Wald", betaPrior = FALSE
+)
+
+# Extract results from DESeq2 analysis
+res_castes_amel <- DESeq2::results(dds_castes_amel)
 
 # Identify hidden batch effects using RUVSeq
-set <- EDASeq::newSeqExpressionSet(DESeq2::counts(castes_dds,
+set <- EDASeq::newSeqExpressionSet(DESeq2::counts(dds_castes_amel,
   normalized = FALSE
 ))
 idx <- rowSums(DESeq2::counts(set) >= 10) >= 3
 set <- set[idx, ]
 set <- EDASeq::betweenLaneNormalization(set, which = "upper")
-notsig <- rownames(castes_res)[which(castes_res$pvalue > 0.1)]
+notsig <- rownames(res_castes_amel)[which(res_castes_amel$pvalue > 0.1)]
 empirical <- rownames(set)[rownames(set) %in% notsig]
 set <- RUVSeq::RUVg(set, empirical, k = 2)
 covars <- cbind(set$W_1, set$W_2)
@@ -304,59 +387,74 @@ covars <- cbind(set$W_1, set$W_2)
 
 ## Add factor(s) of unwanted variation to the design in `DESeqDataSet` object
 ```{r}
-castes_ddsruv <- castes_dds
-castes_ddsruv$W1 <- set$W_1
-castes_ddsruv$W2 <- set$W_2
-design(castes_ddsruv) <- ~ W1 + W2 + caste
+ddsruv_castes_amel <- dds_castes_amel
+ddsruv_castes_amel$W1 <- set$W_1
+ddsruv_castes_amel$W2 <- set$W_2
+design(ddsruv_castes_amel) <- ~ W1 + W2 + caste
 ```
 
 ## Assess the relationships among samples after removing batch effects
 ```{r}
-# Apply the variance stabilizing transformation
+# Apply the variance stabilising transformation
 # The transformed data are on the log2 scale
-castes_vsdruv <- DESeq2::vst(castes_ddsruv, blind = FALSE)
+vsdruv_castes_amel <- DESeq2::vst(ddsruv_castes_amel, blind = FALSE)
 
-# Remove batch effects from the variance-stabilized data
-assay(castes_vsdruv) <- limma::removeBatchEffect(assay(castes_vsdruv),
-  design = model.matrix(~caste, data = castes_table),
+# Remove batch effects from the variance-stabilised data
+assay(vsdruv_castes_amel) <- limma::removeBatchEffect(assay(vsdruv_castes_amel),
+  design = model.matrix(~caste, data = table_castes_amel),
   covariates = covars
   # covariates = set$W_1
 )
 
-castes_pca_data <- DESeq2::plotPCA(castes_vsdruv,
+pca_data_castes_amel <- DESeq2::plotPCA(vsdruv_castes_amel,
   intgroup = c("study", "caste"),
   ntop = 500, returnData = TRUE
 )
 
-percent_var <- round(100 * attr(castes_pca_data, "percentVar"))
+percent_var_castes_amel <- round(100 * attr(pca_data_castes_amel, "percentVar"))
 
-ggplot(castes_pca_data, aes(
-  x = PC1, y = PC2,
-  color = caste, shape = study
-)) +
+pca_data_castes_amel %>%
+  dplyr::mutate(study = dplyr::recode(study,
+    "christen" = "Christen et al., 2018",
+    "jasper" = "Jasper et al., 2015",
+    "liberti" = "Liberti et al., 2019",
+    "manfredini" = "Manfredini et al., 2015"
+  )) %>%
+  dplyr::mutate_at(c("caste", "study"), stringr::str_to_sentence) %>%
+  ggplot(aes(
+    x = PC1, y = PC2, color = caste, shape = study
+  )) +
   geom_point(
     size = 4, stroke = 1
   ) +
-  xlab(paste0("PC1 [", percent_var[1], "%]")) +
-  ylab(paste0("PC2 [", percent_var[2], "%]")) +
+  xlab(paste0("PC1 [", percent_var_castes_amel[1], "%]")) +
+  ylab(paste0("PC2 [", percent_var_castes_amel[2], "%]")) +
   coord_fixed(ratio = 1) +
   theme(
     plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
     plot.subtitle = element_text(hjust = 0.5, size = 14, face = "plain"),
-    legend.title = element_blank(),
+    legend.title = element_text(size = 14),
     legend.text = element_text(size = 12),
     axis.title = element_text(size = 14),
     axis.text = element_text(size = 12)
   ) +
   scale_shape_manual(values = 1:12) +
   labs(
-    title = "Relationships among samples from brains of honey bees",
-    subtitle = "(batch effects removed)"
+    title = "Relationships among samples of brains of honey bees",
+    subtitle = "(batch effects removed)",
+    color = "Caste",
+    shape = "Study"
+  ) +
+  scale_color_brewer(palette = "Set2") +
+  scale_fill_brewer(palette = "Set2") +
+  guides(
+    color = guide_legend(order = 1),
+    shape = guide_legend(order = 2, override.aes = list(color = "#9E9E9E"))
   )
 
 ggsave(
   filename = here::here(
-    "results", "2020-07-28-gene_expression", "supplementary",
+    "results", "2022-07-20-gene_expression", "supplementary",
     "amel_castes_vst_counts_batch_effects_removed_pca.pdf"
   ),
   width = 8,
@@ -368,27 +466,31 @@ ggsave(
 ## Differential gene expression analysis including batch factors
 ```{r}
 # Run DESeq2 pipeline
-castes_ddsruv <- DESeq2::DESeq(castes_ddsruv, test = "Wald", betaPrior = FALSE)
-DESeq2::resultsNames(castes_ddsruv)
+ddsruv_castes_amel <- DESeq2::DESeq(
+  ddsruv_castes_amel,
+  test = "Wald", betaPrior = FALSE
+)
+
+DESeq2::resultsNames(ddsruv_castes_amel)
 
 # Extract results
-castes_resruv <- DESeq2::results(
-  castes_ddsruv,
+resruv_castes_amel <- DESeq2::results(
+  ddsruv_castes_amel,
   contrast = c("caste", "queen", "worker"),
   lfcThreshold = 0,
   alpha = 0.1,
   pAdjustMethod = "BH"
 )
 
-DESeq2::summary(castes_resruv)
+DESeq2::summary(resruv_castes_amel)
 ```
 
 ## Create table of `DESeq2` Wald test results for castes
 ```{r}
-castes_resruv_df <- castes_resruv %>%
+resruv_castes_amel_df <- resruv_castes_amel %>%
   as.data.frame() %>%
   tibble::rownames_to_column(var = "ens_gene") %>%
-  dplyr::filter(ens_gene %in% amel_nachrs) %>%
+  dplyr::filter(ens_gene %in% nachrs_amel) %>%
   dplyr::mutate(subunit = case_when(
     ens_gene == "GB42850" ~ "alpha1",
     ens_gene == "GB42644" ~ "alpha2",
@@ -408,9 +510,9 @@ castes_resruv_df <- castes_resruv %>%
   dplyr::mutate(species = "amel") %>%
   dplyr::mutate_if(is.numeric, round, digits = 4)
 
-write.csv(castes_resruv_df,
+write.csv(resruv_castes_amel_df,
   file = here::here(
-    "results", "2020-07-28-gene_expression",
+    "results", "2022-07-20-gene_expression",
     "amel_castes_deseq2_wald_res_nachrs.csv"
   ),
   row.names = FALSE
@@ -420,55 +522,60 @@ write.csv(castes_resruv_df,
 # Analysis of tissues
 ## Create a `DESeqDataSet` object
 ```{r}
-tissues_dds <- DESeq2::DESeqDataSetFromTximport(tissues_txi,
-  colData = tissues_table,
-  design = ~tissue
+dds_tissues_amel <- DESeq2::DESeqDataSetFromTximport(txi_tissues_amel,
+  colData = table_tissues_amel,
+  design = ~ tissue
 )
 
 # Choose the reference level for tissue factor
-tissues_dds$tissue <- relevel(tissues_dds$tissue, ref = "midgut")
+dds_tissues_amel$tissue <- relevel(dds_tissues_amel$tissue, ref = "midgut")
 ```
 
 ## Pre-filter the low-count genes
 ```{r}
 # Estimate the size factors
-tissues_dds <- DESeq2::estimateSizeFactors(tissues_dds)
+dds_tissues_amel <- DESeq2::estimateSizeFactors(dds_tissues_amel)
 
 # Pre-filter the dataset
-dim(tissues_dds)
+dim(dds_tissues_amel)
 # 15314    48
-keep <- rowSums(DESeq2::counts(tissues_dds) >= 10) >= 3
-tissues_dds <- tissues_dds[keep, ]
-dim(tissues_dds)
+keep <- rowSums(DESeq2::counts(dds_tissues_amel) >= 10) >= 3
+dds_tissues_amel <- dds_tissues_amel[keep, ]
+dim(dds_tissues_amel)
 # 13114    48
 ```
 
 ## Differential gene expression analysis
 ```{r}
 # Run DESeq2 pipeline
-tissues_dds <- DESeq2::DESeq(tissues_dds, test = "Wald", betaPrior = FALSE)
-# DESeq2::resultsNames(tissues_dds)
+dds_tissues_amel <- DESeq2::DESeq(
+  dds_tissues_amel,
+  test = "Wald", betaPrior = FALSE
+)
+# DESeq2::resultsNames(dds_tissues_amel)
 
-tissues <- tissues_table %>%
+tissues_amel <- table_tissues_amel %>%
   dplyr::pull(tissue) %>%
   unique() %>%
   as.character()
 
 # Create list of condition pairs
-tissues_contrasts <- combn(x = tissues, m = 2) %>%
+contrasts_tissues_amel <- combn(x = tissues_amel, m = 2) %>%
   t() %>%
   as.data.frame.array() %>%
   dplyr::rename(cond1 = V1, cond2 = V2) %>%
   dplyr::mutate(contrast = paste0(cond1, "_vs_", cond2))
-tissues_contrasts
+
+contrasts_tissues_amel
 
 # Extract results
-tissues_res <- list()
-for (row in 1:nrow(tissues_contrasts)) {
-  cond1 <- as.character(tissues_contrasts[row, "cond1"])
-  cond2 <- as.character(tissues_contrasts[row, "cond2"])
-  tissues_res[[row]] <- DESeq2::results(
-    tissues_dds,
+res_tissues_amel <- list()
+
+for (row in 1:nrow(contrasts_tissues_amel)) {
+  cond1 <- as.character(contrasts_tissues_amel[row, "cond1"])
+  cond2 <- as.character(contrasts_tissues_amel[row, "cond2"])
+  res_tissues_amel[[row]] <- DESeq2::results(
+    dds_tissues_amel,
     contrast = c("tissue", cond1, cond2),
     lfcThreshold = 0,
     alpha = 0.1,
@@ -476,17 +583,18 @@ for (row in 1:nrow(tissues_contrasts)) {
   )
 }
 
-names(tissues_res) <- tissues_contrasts$contrast
+names(res_tissues_amel) <- contrasts_tissues_amel$contrast
 ```
 
 ## Create table of `DESeq2` Wald test results for tissues
 ```{r}
-tissues_res_df <- list()
-for (contrast in tissues_contrasts$contrast) {
-  tissues_res_df[[contrast]] <- tissues_res[[contrast]] %>%
+res_tissues_amel_df <- list()
+
+for (contrast in contrasts_tissues_amel$contrast) {
+  res_tissues_amel_df[[contrast]] <- res_tissues_amel[[contrast]] %>%
     as.data.frame() %>%
     tibble::rownames_to_column(var = "ens_gene") %>%
-    dplyr::filter(ens_gene %in% amel_nachrs) %>%
+    dplyr::filter(ens_gene %in% nachrs_amel) %>%
     dplyr::mutate(subunit = case_when(
       ens_gene == "GB42850" ~ "alpha1",
       ens_gene == "GB42644" ~ "alpha2",
@@ -507,29 +615,31 @@ for (contrast in tissues_contrasts$contrast) {
     dplyr::mutate_if(is.numeric, round, digits = 4)
 }
 
-tissues_res_df <- dplyr::bind_rows(tissues_res_df)
+res_tissues_amel_df <- dplyr::bind_rows(res_tissues_amel_df)
 
 # Write table of `DESeq2` Wald test results
-write.csv(tissues_res_df,
+write.csv(res_tissues_amel_df,
   file = here::here(
-    "results", "2020-07-28-gene_expression",
+    "results", "2022-07-20-gene_expression",
     "amel_tissues_deseq2_wald_res_nachrs.csv"
   ),
   row.names = FALSE
 )
 
-# table(tissues_res_df$significance)
-# table(tissues_res_df$subunit, tissues_res_df$significance)
+# table(res_tissues_amel_df$significance)
+# table(res_tissues_amel_df$subunit, res_tissues_amel_df$significance)
 ```
 
 ## Perform likelihood ratio test for testing all tissues at once
 ```{r}
-tissues_lrt <- DESeq2::DESeq(tissues_dds, test = "LRT", reduced = ~1)
-tissues_lrt_res <- DESeq2::results(tissues_lrt)
-tissues_lrt_res_df <- tissues_lrt_res %>%
+lrt_tissues_amel <- DESeq2::DESeq(dds_tissues_amel, test = "LRT", reduced = ~1)
+
+reslrt_tissues_amel <- DESeq2::results(lrt_tissues_amel)
+
+reslrt_tissues_amel_df <- reslrt_tissues_amel %>%
   as.data.frame() %>%
   tibble::rownames_to_column(var = "ens_gene") %>%
-  dplyr::filter(ens_gene %in% amel_nachrs) %>%
+  dplyr::filter(ens_gene %in% nachrs_amel) %>%
   dplyr::mutate(subunit = case_when(
     ens_gene == "GB42850" ~ "alpha1",
     ens_gene == "GB42644" ~ "alpha2",
@@ -547,9 +657,9 @@ tissues_lrt_res_df <- tissues_lrt_res %>%
   dplyr::mutate(species = "amel") %>%
   dplyr::mutate_if(is.numeric, round, digits = 4)
 
-write.csv(tissues_lrt_res_df,
+write.csv(reslrt_tissues_amel_df,
   file = here::here(
-    "results", "2020-07-28-gene_expression",
+    "results", "2022-07-20-gene_expression",
     "amel_tissues_deseq2_lrt_res_nachrs.csv"
   ),
   row.names = FALSE
@@ -559,45 +669,49 @@ write.csv(tissues_lrt_res_df,
 # Analysis of foragers and nurses
 ```{r}
 # Combine the factors of interest (tissue and behavior) into a single factor
-tissues_dds$group <- factor(paste0(
-  tissues_dds$behavior, tissues_dds$tissue
+dds_tissues_amel$group <- factor(paste(
+  dds_tissues_amel$behavior, dds_tissues_amel$tissue,
+  sep = "_"
 ))
 
 # Change the design to include only this factor, e.g. ~ group
-design(tissues_dds) <- ~group
+design(dds_tissues_amel) <- ~ group
 
 # Run the DESeq2 pipeline
-tissues_dds <- DESeq2::DESeq(tissues_dds, test = "Wald", betaPrior = FALSE)
+dds_tissues_amel <- DESeq2::DESeq(dds_tissues_amel, test = "Wald", betaPrior = FALSE)
 
 # Create list of group pairs, comparing the same tissue from
 # foragers and nurses
-tissues_foragers <- tissues_table %>%
+foragers_tissues_amel <- table_tissues_amel %>%
   dplyr::filter(behavior == "forager") %>%
-  dplyr::mutate(group = paste0(behavior, tissue)) %>%
+  dplyr::mutate(group = paste(behavior, tissue, sep = "_")) %>%
   dplyr::pull(group) %>%
-  unique() %>% 
+  unique() %>%
   sort()
 
-tissues_nurses <- tissues_table %>%
+nurses_tissues_amel <- table_tissues_amel %>%
   dplyr::filter(behavior == "nurse") %>%
-  dplyr::mutate(group = paste0(behavior, tissue)) %>%
+  dplyr::mutate(group = paste(behavior, tissue, sep = "_")) %>%
   dplyr::pull(group) %>%
-  unique() %>% 
+  unique() %>%
   sort()
 
-groups_contrasts <- dplyr::tibble(
-  group1 = tissues_foragers,
-  group2 = tissues_nurses,
+contrasts_groups_amel <- dplyr::tibble(
+  group1 = foragers_tissues_amel,
+  group2 = nurses_tissues_amel,
   contrast = paste0(group1, "_vs_", group2)
-  )
+)
+
+contrasts_groups_amel
 
 # Extract results
-groups_res <- list()
-for (row in 1:nrow(groups_contrasts)) {
-  group1 <- as.character(groups_contrasts[row, "group1"])
-  group2 <- as.character(groups_contrasts[row, "group2"])
-  groups_res[[row]] <- DESeq2::results(
-    tissues_dds,
+res_groups_amel <- list()
+
+for (row in 1:nrow(contrasts_groups_amel)) {
+  group1 <- as.character(contrasts_groups_amel[row, "group1"])
+  group2 <- as.character(contrasts_groups_amel[row, "group2"])
+  res_groups_amel[[row]] <- DESeq2::results(
+    dds_tissues_amel,
     contrast = c("group", group1, group2),
     lfcThreshold = 0,
     alpha = 0.1,
@@ -605,17 +719,18 @@ for (row in 1:nrow(groups_contrasts)) {
   )
 }
 
-names(groups_res) <- groups_contrasts$contrast
+names(res_groups_amel) <- contrasts_groups_amel$contrast
 ```
 
 ## Create table of `DESeq2` Wald test results for foragers and nurses
 ```{r}
-groups_res_df <- list()
-for (contrast in groups_contrasts$contrast) {
-  groups_res_df[[contrast]] <- groups_res[[contrast]] %>%
+res_groups_amel_df <- list()
+
+for (contrast in contrasts_groups_amel$contrast) {
+  res_groups_amel_df[[contrast]] <- res_groups_amel[[contrast]] %>%
     as.data.frame() %>%
     tibble::rownames_to_column(var = "ens_gene") %>%
-    dplyr::filter(ens_gene %in% amel_nachrs) %>%
+    dplyr::filter(ens_gene %in% nachrs_amel) %>%
     dplyr::mutate(subunit = case_when(
       ens_gene == "GB42850" ~ "alpha1",
       ens_gene == "GB42644" ~ "alpha2",
@@ -636,12 +751,12 @@ for (contrast in groups_contrasts$contrast) {
     dplyr::mutate_if(is.numeric, round, digits = 4)
 }
 
-groups_res_df <- dplyr::bind_rows(groups_res_df)
+res_groups_amel_df <- dplyr::bind_rows(res_groups_amel_df)
 
 # Write table of `DESeq2` Wald test results
-write.csv(groups_res_df,
+write.csv(res_groups_amel_df,
   file = here::here(
-    "results", "2020-07-28-gene_expression",
+    "results", "2022-07-20-gene_expression",
     "amel_foragers_nurses_deseq2_wald_res_nachrs.csv"
   ),
   row.names = FALSE
@@ -653,24 +768,30 @@ write.csv(groups_res_df,
 ```{r}
 # Apply the variance stabilizing transformation
 # The transformed data are on the log2 scale
-tissues_vsd <- DESeq2::vst(tissues_dds, blind = FALSE)
+vsd_tissues_amel <- DESeq2::vst(dds_tissues_amel, blind = FALSE)
 
-tissues_pca_data <- DESeq2::plotPCA(tissues_vsd,
+pca_data_tissues_amel <- DESeq2::plotPCA(vsd_tissues_amel,
   intgroup = "tissue",
   ntop = 500, returnData = TRUE
 )
 
-percent_var <- round(100 * attr(tissues_pca_data, "percentVar"))
+percent_var_tissues_amel <- round(100 * attr(pca_data_tissues_amel, "percentVar"))
 
-ggplot(tissues_pca_data, aes(
-  x = PC1, y = PC2,
-  color = tissue, shape = tissue
-)) +
+pca_data_tissues_amel %>%
+  dplyr::mutate(
+    tissue = stringr::str_to_sentence(tissue)
+  ) %>%
+  dplyr::mutate(
+    tissue = stringr::str_replace(tissue, "_", " ")
+  ) %>%
+  ggplot(aes(
+    x = PC1, y = PC2, color = tissue, shape = tissue
+  )) +
   geom_point(
     size = 4, stroke = 1
   ) +
-  xlab(paste0("PC1 [", percent_var[1], "%]")) +
-  ylab(paste0("PC2 [", percent_var[2], "%]")) +
+  xlab(paste0("PC1 [", percent_var_tissues_amel[1], "%]")) +
+  ylab(paste0("PC2 [", percent_var_tissues_amel[2], "%]")) +
   coord_fixed(ratio = 1) +
   theme(
     plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
@@ -681,29 +802,31 @@ ggplot(tissues_pca_data, aes(
     axis.text = element_text(size = 12)
   ) +
   scale_shape_manual(values = 1:9) +
+  scale_color_manual(values = colorRampPalette(brewer.pal(8, "Set2"))(9)) +
+  scale_fill_manual(values = colorRampPalette(brewer.pal(8, "Set2"))(9)) +
   labs(
     title = "Relationships among samples from honey bee tissues"
   )
 
-ggsave(
-  filename = here::here(
-    "results", "2020-07-28-gene_expression", "supplementary",
-    "amel_tissues_vst_counts_pca.pdf"
-  ),
-  width = 8,
-  height = 6,
-  units = "in"
-)
+# ggsave(
+#   filename = here::here(
+#     "results", "2022-07-20-gene_expression", "supplementary",
+#     "amel_tissues_vst_counts_pca.pdf"
+#   ),
+#   width = 8,
+#   height = 6,
+#   units = "in"
+# )
 ```
 
 ## Heatmap of transformed, normalised counts of samples from tissues
 ```{r}
-tissues_vsd_nachrs <- assay(tissues_vsd) %>%
+vsd_nachrs_tissues_amel <- assay(vsd_tissues_amel) %>%
   as.data.frame() %>%
   tibble::rownames_to_column(var = "ens_gene") %>%
   tidyr::gather(key = "sample", value = "vst_count", -ens_gene) %>%
   dplyr::mutate_if(is.numeric, round, digits = 4) %>%
-  dplyr::filter(ens_gene %in% amel_nachrs) %>%
+  dplyr::filter(ens_gene %in% nachrs_amel) %>%
   dplyr::mutate(subunit = case_when(
     ens_gene == "GB42850" ~ "alpha1",
     ens_gene == "GB42644" ~ "alpha2",
@@ -719,15 +842,20 @@ tissues_vsd_nachrs <- assay(tissues_vsd) %>%
   ))
 
 regex_remove <- c("^.+?_", "_\\w\\d$")
-tissues_vsd_nachrs <- tissues_vsd_nachrs%>%
-  dplyr::mutate(group = stringr::str_remove_all(sample,
-    paste(regex_remove, collapse = "|"))) %>%
-  dplyr::mutate(
-    group = stringr::str_to_sentence(group)) %>%
-  dplyr::mutate(
-    group = stringr::str_replace(group, "_", " "))
 
-ggplot(tissues_vsd_nachrs, aes(
+vsd_nachrs_tissues_amel <- vsd_nachrs_tissues_amel %>%
+  dplyr::mutate(group = stringr::str_remove_all(
+    sample,
+    paste(regex_remove, collapse = "|")
+  )) %>%
+  dplyr::mutate(
+    group = stringr::str_to_sentence(group)
+  ) %>%
+  dplyr::mutate(
+    group = stringr::str_replace(group, "_", " ")
+  )
+
+ggplot(vsd_nachrs_tissues_amel, aes(
   x = sample, y = subunit, fill = vst_count
 )) +
   geom_tile(color = "white") +
@@ -737,29 +865,31 @@ ggplot(tissues_vsd_nachrs, aes(
     legend.title = element_blank(),
     legend.text = element_text(size = 12),
     axis.title = element_text(size = 14),
-    axis.text = element_text(size = 10),
+    axis.text = element_text(size = 12),
     # axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
     axis.text.x = element_blank(),
     panel.spacing = unit(4, "mm"),
-    strip.text = element_text(size = 10)
+    strip.text = element_text(size = 14)
   ) +
   labs(
     title = "Heatmap of transformed counts from honey bee tissues",
     x = "Sample",
     y = expression(paste("Log"[2], " (VST) transformed count"))
   ) +
-  scale_y_discrete(limits = rev(levels(factor(tissues_vsd_nachrs$subunit)))) +
+  scale_y_discrete(limits = rev(levels(factor(vsd_nachrs_tissues_amel$subunit)))) +
   scale_fill_gradientn(colours = c("#3B9AB2", "#78B7C5", "#EBCC2A")) +
-  facet_wrap(~group, ncol = 10, scales = "free_x", 
-    labeller = label_wrap_gen(12))
+  facet_wrap(~group,
+    ncol = 10, scales = "free_x",
+    labeller = label_wrap_gen(12)
+  )
 
-ggsave(
-  filename = here::here(
-    "results", "2020-07-28-gene_expression", "supplementary",
-    "amel_tissues_vst_counts_heatmap.pdf"
-  ),
-  width = 12,
-  height = 4,
-  units = "in"
-)
+# ggsave(
+#   filename = here::here(
+#     "results", "2022-07-20-gene_expression", "supplementary",
+#     "amel_tissues_vst_counts_heatmap.pdf"
+#   ),
+#   width = 12,
+#   height = 4,
+#   units = "in"
+# )
 ```
