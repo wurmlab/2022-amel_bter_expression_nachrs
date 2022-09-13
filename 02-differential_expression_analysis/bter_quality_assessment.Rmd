@@ -34,68 +34,69 @@ load_pkgs <- function(pkg) {
 }
 
 cran_pkgs <- c(
-  "BiocManager", "tidyverse", "RColorBrewer", "pheatmap", "styler", "here"
+  "BiocManager", "tidyverse", "GGally", "ggtext", "ggh4x", "ggforce",
+  "RColorBrewer", "styler", "patchwork", "here"
 )
+
 load_pkgs(cran_pkgs)
 
 bioconductor_pkgs <- c(
-  "biomaRt", "rhdf5", "tximport", "DESeq2"
+  "biomaRt", "rhdf5", "tximport", "DESeq2", "vsn", "hexbin"
 )
+
 load_pkgs(bioconductor_pkgs)
 ```
 
-# Set a custom ggplot theme
+# Set a custom `ggplot` theme
 ```{r}
 # Set a custom ggplot theme
 # devtools::install_github("cttobin/ggthemr")
 library(ggthemr)
+
+# Diverging
 custom_palette <- c(
-  "#9E9E9E", "#59BDEF", "#EBCC2A", "#E1AF00", "#F27C8D", "#7B73D1", "#7B9FE0",
-  "#F5CC7F", "#66C2A5", "#28A7B6", "#F2CB57", "#F2A057", "#F2845C"
+  "#9E9E9E", "#88CCEE", "#18913D", "#E9C83A", "#882255", "#CC6677",
+  "#332288", "#7B73D1", "#2857BA", "#28A7B6", "#F2CB57", "#F2845C"
 )
+
 # ggthemr::colour_plot(custom_palette)
 
 custom_theme <- ggthemr::define_palette(
   swatch = custom_palette,
-  gradient = c(lower = "#59BDEF", upper = "#FF6B5A")
+  gradient = c(lower = "#E9C83A", upper = "#882255")
 )
+
 ggthemr::ggthemr(custom_theme)
 ```
 
-# Create directory for results
 ```{r}
 # here::here()
 # Create directory for results
-dir.create(here::here("results", "2020-07-28-gene_expression",
-  "supplementary"),
+dir.create(here::here("results", "2022-07-20-gene_expression", "supplementary"),
   recursive = TRUE
 )
 ```
 
 # Associate transcripts to genes
 ```{r}
-# Remove all biomaRt cached files
-# biomaRt::biomartCacheInfo()
-# biomaRt::biomartCacheClear()
-
-# Retrieve Ensembl gene identifiers/names and create transcript-to-gene table
-biomaRt::listMarts(host = "metazoa.ensembl.org")
-
-bter_mart <- biomaRt::useMart(
+mart_bter <- biomaRt::useMart(
   biomart = "metazoa_mart",
   dataset = "bterrestris_eg_gene",
-  host = "metazoa.ensembl.org" # version 48
+  host = "sep2019-metazoa.ensembl.org"
 )
 
-bter_tx2gene <- biomaRt::getBM(
+tx2gene_bter <- biomaRt::getBM(
   attributes = c("ensembl_transcript_id", "ensembl_gene_id"),
-  mart = bter_mart
+  mart = mart_bter
 )
+
+# tx2gene_bter <- read.csv(file = "bter1.0tx2gene.csv",
+#   header = TRUE)
 ```
 
 # Create vector of nAChR gene identifiers
 ```{r}
-bter_nachrs <- c(
+nachrs_bter <- c(
   "LOC100643274", "LOC100643282", "LOC100645032", "LOC100646787",
   "LOC100647301", "LOC100647350", "LOC100647624", "LOC100648987",
   "LOC100649515", "LOC100649612", "LOC100649796"
@@ -106,88 +107,88 @@ bter_nachrs <- c(
 ## Read table of samples and covariates and `kallisto` results
 ```{r}
 # Set sample identifiers using the names of the kallisto output directories
-castes_ids <- dir(here::here(
-  "2019-colgan_queen_worker_head", "2020-07-14-kallisto", "results"
+ids_castes_bter <- dir(here::here(
+  "results", "2019-colgan_queen_worker_head", "2020-07-14-kallisto", "results"
 ))
 
 # Read metadata table
-castes_table <- read.csv(
+table_castes_bter <- read.csv(
   here::here(
-    "bter_metadata",
+    "metadata_bter",
     "2019-colgan_queen_worker_head_metadata.csv"
   ),
   header = TRUE,
   stringsAsFactors = TRUE
 )
 
-castes_table$caste <- relevel(
-  castes_table$caste,
+table_castes_bter$caste <- relevel(
+  table_castes_bter$caste,
   ref = "worker"
 )
 
-castes_files <- here::here(
-  "2019-colgan_queen_worker_head", "2020-07-14-kallisto", "results",
-  castes_table$sample,
+files_castes_bter <- here::here(
+  "results", "2019-colgan_queen_worker_head", "2020-07-14-kallisto", "results",
+  table_castes_bter$sample,
   "abundance.h5"
 )
 
-names(castes_files) <- castes_table$sample
+names(files_castes_bter) <- table_castes_bter$sample
 
 # Check that sample names match
-all(castes_ids %in% castes_table$sample)
+all(ids_castes_bter %in% table_castes_bter$sample)
 
 # Check that all files exist
-all(file.exists(castes_files))
+all(file.exists(files_castes_bter))
 ```
 
 ## Create a `DESeqDataSet` object
 ```{r}
 # Import kallisto quantifications
-castes_txi <- tximport::tximport(castes_files,
+txi_castes_bter <- tximport::tximport(files_castes_bter,
   type = "kallisto",
-  tx2gene = bter_tx2gene,
+  tx2gene = tx2gene_bter,
   txOut = FALSE
 )
 
 # Create a DESeqDataSet object
 # The design below includes the batch factors "block" and "room"
-castes_dds <- DESeq2::DESeqDataSetFromTximport(castes_txi,
-  colData = castes_table,
+dds_castes_bter <- DESeq2::DESeqDataSetFromTximport(txi_castes_bter,
+  colData = table_castes_bter,
   design = ~ block + room + caste
 )
 
 # Choose the reference level for caste factor
-castes_dds$caste <- relevel(castes_dds$caste, ref = "worker")
+dds_castes_bter$caste <- relevel(dds_castes_bter$caste, ref = "worker")
 ```
 
 ## Pre-filter the low-count genes
 ```{r}
 # Estimate the size factors
-castes_dds <- DESeq2::estimateSizeFactors(castes_dds)
+dds_castes_bter <- DESeq2::estimateSizeFactors(dds_castes_bter)
 
 # Pre-filter the dataset
-dim(castes_dds)
+dim(dds_castes_bter)
 # 10661
 # At least 4 samples with a count of 10 or higher
 # The number of samples would be set to the smallest group size
-keep <- rowSums(DESeq2::counts(castes_dds) >= 10) >= 4
-castes_dds <- castes_dds[keep, ]
-dim(castes_dds)
+keep <- rowSums(DESeq2::counts(dds_castes_bter) >= 10) >= 4
+dds_castes_bter <- dds_castes_bter[keep, ]
+dim(dds_castes_bter)
 # 9139
 ```
 
 ## Data transformation and quality assessment
 Transform count data using `DESeq2`'s `vst` function.
 ```{r}
-# Apply the variance stabilizing transformation
-castes_vsd <- DESeq2::vst(castes_dds, blind = FALSE)
+# Apply the variance stabilising transformation
+vsd_castes_bter <- DESeq2::vst(dds_castes_bter, blind = FALSE)
 
 # Effect of transformation on the variance
-vsn::meanSdPlot(assay(castes_vsd))
+vsn::meanSdPlot(assay(vsd_castes_bter))
 
 ggsave(
   filename = here::here(
-    "results", "2020-07-28-gene_expression",
+    "results", "2022-07-20-gene_expression",
     "supplementary", "bter_castes_vst_counts_smeanSdPlot.pdf"
   ),
   width = 5,
@@ -202,24 +203,24 @@ ggsave(
 # explained by batch
 # Here "design" relates to "treatment conditions to be preserved, usually the
 # design matrix with all experimental factors other than the batch effects."
-mod <- model.matrix(~ 0 + caste, data = castes_table)
-mat <- assay(castes_vsd)
+mod <- model.matrix(~ 0 + caste, data = table_castes_bter)
+mat <- assay(vsd_castes_bter)
 mat <- limma::removeBatchEffect(mat,
-  batch = castes_vsd$block,
-  batch2 = castes_vsd$room,
+  batch = vsd_castes_bter$block,
+  batch2 = vsd_castes_bter$room,
   design = mod
 )
-assay(castes_vsd) <- mat
+assay(vsd_castes_bter) <- mat
 ```
 
 ## Plot the (VST) transformed counts with batch variation removed
 ```{r}
 # Create a tidy data frame with the transformed counts
-castes_vsd_nachrs <- assay(castes_vsd) %>%
+vsd_nachrs_castes_bter <- assay(vsd_castes_bter) %>%
   as.data.frame() %>%
   tibble::rownames_to_column(var = "ens_gene") %>%
   tidyr::gather(key = "sample", value = "vst_count", -ens_gene) %>%
-  dplyr::filter(ens_gene %in% bter_nachrs) %>%
+  dplyr::filter(ens_gene %in% nachrs_bter) %>%
   dplyr::filter(ens_gene != "LOC100645032") %>%
   dplyr::mutate(subunit = case_when(
     ens_gene == "LOC100647624" ~ "alpha1",
@@ -239,14 +240,18 @@ castes_vsd_nachrs <- assay(castes_vsd) %>%
   )) %>%
   dplyr::mutate_if(is.numeric, round, digits = 4)
 
-ggplot(castes_vsd_nachrs, aes(
-  x = caste, y = vst_count, color = caste, fill = caste
-)) +
+vsd_nachrs_castes_bter %>%
+  dplyr::mutate(
+    caste = stringr::str_to_sentence(caste)
+  ) %>%
+  ggplot(aes(
+    x = caste, y = vst_count, color = caste, fill = caste
+  )) +
   geom_boxplot(
     alpha = 0.8, width = 0.4, position = position_dodge(0.8), size = 0.6
   ) +
   geom_jitter(
-    shape = 21, fill = "white", size = 1.6, stroke = 0.8, 
+    shape = 21, fill = "white", size = 1.6, stroke = 0.8,
     position = position_dodge(0.8)
   ) +
   theme(
@@ -264,11 +269,13 @@ ggplot(castes_vsd_nachrs, aes(
     x = "Caste",
     y = expression(paste("Log"[2], " (VST) transformed count")) # batch variation removed
   ) +
-  facet_wrap(~subunit, ncol = 10)
+  facet_wrap(~subunit, ncol = 10) +
+  scale_color_brewer(palette = "Set2") +
+  scale_fill_brewer(palette = "Set2")
 
 ggsave(
   filename = here::here(
-    "results", "2020-07-28-gene_expression",
+    "results", "2022-07-20-gene_expression",
     "supplementary", "bter_castes_vst_counts_nachrs_boxplots.pdf"
   ),
   width = 8,
@@ -279,22 +286,23 @@ ggsave(
 
 ## Principal component plot of the samples
 ```{r}
-castes_pca_data <- DESeq2::plotPCA(castes_vsd,
+pca_data_castes_bter <- DESeq2::plotPCA(vsd_castes_bter,
   intgroup = "caste",
   n = 500,
   returnData = TRUE
 )
 
 # Customize PCA plot
-percent_var <- round(100 * attr(castes_pca_data, "percentVar"))
+percent_var_castes_bter <- round(100 * attr(pca_data_castes_bter, "percentVar"))
 
-castes_breaks <- c("queen", "worker")
-castes_colors <- c("#59BDEF", "#EBCC2A")
-
-ggplot(castes_pca_data, aes(x = PC1, y = PC2, color = caste)) +
+pca_data_castes_bter %>%
+  dplyr::mutate(
+    caste = stringr::str_to_sentence(caste)
+  ) %>%
+  ggplot(aes(x = PC1, y = PC2, color = caste)) +
   geom_point(size = 4) +
-  xlab(paste0("PC1 [", percent_var[1], "%]")) +
-  ylab(paste0("PC2 [", percent_var[2], "%]")) +
+  xlab(paste0("PC1 [", percent_var_castes_bter[1], "%]")) +
+  ylab(paste0("PC2 [", percent_var_castes_bter[2], "%]")) +
   coord_fixed(ratio = 1) +
   theme(
     plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
@@ -305,15 +313,15 @@ ggplot(castes_pca_data, aes(x = PC1, y = PC2, color = caste)) +
     axis.text = element_text(size = 12)
   ) +
   labs(
-    title = "Relationships among samples from heads of bumble bees",
+    title = "Relationships among samples of heads of bumble bees",
     subtitle = "(batch effects removed)"
   ) +
-  scale_fill_manual(breaks = castes_breaks, values = castes_colors) +
-  scale_color_manual(breaks = castes_breaks, values = castes_colors)
+  scale_color_brewer(palette = "Set2") +
+  scale_fill_brewer(palette = "Set2")
 
 ggsave(
   filename = here::here(
-    "results", "2020-07-28-gene_expression",
+    "results", "2022-07-20-gene_expression",
     "supplementary", "bter_castes_vst_counts_pca.pdf"
   ),
   width = 6,
@@ -326,92 +334,93 @@ ggsave(
 ## Read `kallisto` results and table of samples and covariates.
 ```{r}
 # Set sample identifiers using the names of the kallisto output directories
-lifestages_ids <- dir(here::here(
-  "2015-harrison_queen_worker_whole_body", "results",
+ids_lifestages_bter <- dir(here::here(
+  "results", "2015-harrison_queen_worker_whole_body", "results",
   "2020-07-14-kallisto"
 ))
 
 # Read metadata table
-lifestages_table <- read.csv(
+table_lifestages_bter <- read.csv(
   here::here(
-    "bter_metadata",
+    "metadata_bter",
     "2015-harrison_queen_worker_whole_body_metadata.csv"
   ),
   header = TRUE,
   stringsAsFactors = TRUE
 )
 
-lifestages_table$condition <- relevel(
-  lifestages_table$condition,
+table_lifestages_bter$condition <- relevel(
+  table_lifestages_bter$condition,
   ref = "worker_larva"
 )
 
-lifestages_files <- here::here(
-  "2015-harrison_queen_worker_whole_body",
+files_lifestages_bter <- here::here(
+  "results", "2015-harrison_queen_worker_whole_body",
   "2020-07-14-kallisto", "results",
-  lifestages_table$sample,
+  table_lifestages_bter$sample,
   "abundance.h5"
 )
 
-names(lifestages_files) <- lifestages_table$sample
+names(files_lifestages_bter) <- table_lifestages_bter$sample
 
 # Check that sample names match
-all(lifestages_ids %in% lifestages_table$sample)
+all(ids_lifestages_bter %in% table_lifestages_bter$sample)
 
 # Check that all files exist
-all(file.exists(lifestages_files))
+all(file.exists(files_lifestages_bter))
 ```
 
 ## Create a `DESeqDataSet` object
 ```{r}
 # Import kallisto quantifications
-lifestages_txi <- tximport::tximport(lifestages_files,
+txi_lifestages_bter <- tximport::tximport(files_lifestages_bter,
   type = "kallisto",
-  tx2gene = bter_tx2gene,
+  tx2gene = tx2gene_bter,
   txOut = FALSE
 )
 
 # Create a DESeqDataSet object
-lifestages_dds <- DESeq2::DESeqDataSetFromTximport(lifestages_txi,
-  colData = lifestages_table,
+dds_lifestages_bter <- DESeq2::DESeqDataSetFromTximport(txi_lifestages_bter,
+  colData = table_lifestages_bter,
   design = ~condition
 )
 
 # Choose the reference level for condition factor
-lifestages_dds$condition <- relevel(lifestages_dds$condition, 
-  ref = "worker_larva")
+dds_lifestages_bter$condition <- relevel(dds_lifestages_bter$condition,
+  ref = "worker_larva"
+)
 ```
 
 ## Pre-filter the low-count genes
 ```{r}
 # Estimate the size factors
-lifestages_dds <- DESeq2::estimateSizeFactors(lifestages_dds)
+dds_lifestages_bter <- DESeq2::estimateSizeFactors(dds_lifestages_bter)
 
 # Pre-filter the dataset
-dim(lifestages_dds)
+dim(dds_lifestages_bter)
 # 10661
 # At least 3 samples with a count of 10 or higher
 # The number of samples would be set to the smallest group size
-keep <- rowSums(DESeq2::counts(lifestages_dds) >= 10) >= 3
-lifestages_dds <- lifestages_dds[keep, ]
-dim(lifestages_dds)
+keep <- rowSums(DESeq2::counts(dds_lifestages_bter) >= 10) >= 3
+dds_lifestages_bter <- dds_lifestages_bter[keep, ]
+dim(dds_lifestages_bter)
 # 9892
 ```
 
 ## Data transformation and quality assessment
-Transform count data using `DESeq2`'s `vst` function. The variance stabilizing 
+Transform count data using `DESeq2`'s `vst` function. The variance stabilising 
 transformation (`vst`) is used for visualization, clustering or other machine 
 learning tasks.
 ```{r}
-# Variance stabilizing transformation
-lifestages_vsd <- DESeq2::vst(lifestages_dds, blind = FALSE)
+# Apply the variance stabilising transformation
+vsd_lifestages_bter <- DESeq2::vst(dds_lifestages_bter, blind = FALSE)
 
 # Effect of transformation on the variance
-vsn::meanSdPlot(assay(lifestages_vsd))
+vsn::meanSdPlot(assay(vsd_lifestages_bter))
 
 ggsave(
   filename = here(
-    "results", "2020-07-28-gene_expression",
+    "results", "2022-07-20-gene_expression",
     "supplementary", "bter_life_stages_vst_counts_meanSdPlot.pdf"
   ),
   width = 5,
@@ -423,11 +432,11 @@ ggsave(
 ## Plot the (VST) transformed counts
 ```{r}
 # Create a tidy data frame with the transformed counts
-lifestages_vsd_nachrs <- assay(lifestages_vsd) %>%
+vsd_nachrs_lifestages_bter <- assay(vsd_lifestages_bter) %>%
   as.data.frame() %>%
   tibble::rownames_to_column(var = "ens_gene") %>%
   tidyr::gather(key = "sample", value = "vst_count", -ens_gene) %>%
-  dplyr::filter(ens_gene %in% bter_nachrs) %>%
+  dplyr::filter(ens_gene %in% nachrs_bter) %>%
   dplyr::filter(ens_gene != "LOC100645032") %>%
   dplyr::mutate(subunit = case_when(
     ens_gene == "LOC100647624" ~ "alpha1",
@@ -449,11 +458,18 @@ lifestages_vsd_nachrs <- assay(lifestages_vsd) %>%
   )) %>%
   dplyr::mutate_if(is.numeric, round, digits = 4)
 
-ggplot(lifestages_vsd_nachrs, aes(
-  x = condition, y = vst_count, color = condition, fill = condition
-)) +
+vsd_nachrs_lifestages_bter %>%
+  dplyr::mutate(
+    condition = stringr::str_to_sentence(condition)
+  ) %>%
+  dplyr::mutate(
+    condition = stringr::str_replace(condition, "_", " ")
+  ) %>%
+  ggplot(aes(
+    x = condition, y = vst_count, color = condition, fill = condition
+  )) +
   geom_boxplot(
-    alpha = 0.6, width = 0.4, position = position_dodge(0.8), size = 0.6
+    alpha = 0.8, width = 0.4, position = position_dodge(0.8), size = 0.6
   ) +
   geom_jitter(
     shape = 21, fill = "white", size = 1.6, stroke = 0.8,
@@ -474,11 +490,13 @@ ggplot(lifestages_vsd_nachrs, aes(
     x = "Condition",
     y = expression(paste("Log"[2], " (VST) transformed count")) # batch variation removed
   ) +
-  facet_wrap(~subunit, ncol = 10)
+  facet_wrap(~subunit, ncol = 10) +
+  scale_color_brewer(palette = "Set2") +
+  scale_fill_brewer(palette = "Set2")
 
 ggsave(
   filename = here::here(
-    "results", "2020-07-28-gene_expression",
+    "results", "2022-07-20-gene_expression",
     "supplementary", "bter_life_stages_vst_counts_nachrs_boxplots.pdf"
   ),
   width = 10,
@@ -489,21 +507,31 @@ ggsave(
 
 ## Principal component plot of the samples
 ```{r}
-lifestages_pca_data <- DESeq2::plotPCA(lifestages_vsd,
+pca_data_lifestages_bter <- DESeq2::plotPCA(vsd_lifestages_bter,
   intgroup = "condition",
   n = 500,
   returnData = TRUE
 )
 
 # Customize PCA plot
-percent_var <- round(100 * attr(lifestages_pca_data, "percentVar"))
+percent_var_lifestages_bter <- round(
+  100 * attr(pca_data_lifestages_bter, "percentVar")
+)
 
-ggplot(lifestages_pca_data, 
-  aes(x = PC1, y = PC2, color = condition, shape = condition)) +
+pca_data_lifestages_bter %>%
+  dplyr::mutate(
+    condition = stringr::str_to_sentence(condition)
+  ) %>%
+  dplyr::mutate(
+    condition = stringr::str_replace(condition, "_", " ")
+  ) %>%
+  ggplot(
+    aes(x = PC1, y = PC2, color = condition, shape = condition)
+  ) +
   geom_point(size = 4, alpha = 0.8) +
   # geom_point(size = 4, stroke = 1, shape = 21) +
-  xlab(paste0("PC1 [", percent_var[1], "%]")) +
-  ylab(paste0("PC2 [", percent_var[2], "%]")) +
+  xlab(paste0("PC1 [", percent_var_lifestages_bter[1], "%]")) +
+  ylab(paste0("PC2 [", percent_var_lifestages_bter[2], "%]")) +
   coord_fixed(ratio = 1) +
   theme(
     plot.title = element_text(hjust = 0.5, size = 14, face = "plain"),
@@ -513,13 +541,16 @@ ggplot(lifestages_pca_data,
     axis.text = element_text(size = 12)
   ) +
   labs(
-    title = "Relationships among samples from whole bodies of bumble bees"
-  )
+    title = "Relationships among samples of whole bodies of bumble bees"
+  ) +
+  scale_color_brewer(palette = "Set2") +
+  scale_fill_brewer(palette = "Set2")
 
 ggsave(
   filename = here::here(
-    "results", "2020-07-28-gene_expression",
-    "supplementary", "bter_life_stages_vst_counts_pca.pdf"),
+    "results", "2022-07-20-gene_expression",
+    "supplementary", "bter_life_stages_vst_counts_pca.pdf"
+  ),
   width = 8,
   height = 6,
   units = "in"
