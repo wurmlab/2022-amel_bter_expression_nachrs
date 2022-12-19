@@ -342,7 +342,7 @@ glmfit_castes_tidy_amel <- broom::tidy(glmfit_castes_amel) %>%
 write.csv(glmfit_castes_tidy_amel,
   file = here::here(
     "results", "2022-07-20-gene_expression",
-    "bter_life_stages_proportions_glm_tidy.csv"
+    "amel_castes_proportions_glm_tidy.csv"
   ),
   row.names = FALSE
 )
